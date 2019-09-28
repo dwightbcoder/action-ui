@@ -1,0 +1,32 @@
+{
+  "name": "@dwightbcoder/action-ui",
+  "version": "1.0.0",
+  "description": "Action UI is a Javascript framework for building event-base user interfaces",
+  "main": "src/index.js",
+  "directories": {
+    "example": "example"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dwightbcoder/action-ui.git"
+  },
+  "keywords": [
+    "js",
+    "javascript",
+    "ui",
+    "framework",
+    "mvc",
+    "action-ui",
+    "handlebars",
+    "jsonapi"
+  ],
+  "author": "Dwight Brown",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/dwightbcoder/action-ui/issues"
+  },
+  "homepage": "https://github.com/dwightbcoder/action-ui#readme"
+}
