@@ -1,6 +1,6 @@
 {
   "name": "@dwightbcoder/action-ui",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Action UI is a Javascript framework for building event-base user interfaces",
   "main": "src/index.js",
   "directories": {
