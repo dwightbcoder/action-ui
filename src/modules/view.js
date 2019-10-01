@@ -1,5 +1,4 @@
-'use strict'
-import { Util } from './util.js'
+import * as Util from './util.js'
 import { Model } from './model.js'
 
 /**

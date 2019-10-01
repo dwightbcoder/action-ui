@@ -1,5 +1,3 @@
-'use strict'
-
 /**
  * Controller
  * Provider route mapping for SPAs
@@ -11,15 +9,9 @@ class Controller
         this.view = view
     }
 
-    index()
-    {
-        //this.view.render()
-    }
+    __autoload() { return this.view.render() }
 
-    _404(path)
-    {
-        //this.view.render()
-    }
+    __error(e) { return this.view.render() }
 
     get view() { return this._view }
     set view(view) { this._view = view }

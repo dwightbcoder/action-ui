@@ -1,59 +1,54 @@
-'use strict'
-
 /**
  * Utilities
  */
-class Util
+function deepAssign(target, source)
 {
-    static deepAssign(target, source)
+    for (let i in source)
     {
-        for (let i in source)
+        if (source.hasOwnProperty(i))
         {
-            if (source.hasOwnProperty(i))
+            if (target.hasOwnProperty(i))
             {
-                if (target.hasOwnProperty(i))
+                if (source[i] instanceof Object)
                 {
-                    if (source[i] instanceof Object)
-                    {
-                        Util.deepAssign(target[i], source[i])
-                    }
-                    else if (target[i] != source[i])
-                    {
-                        target[i] = source[i]
-                    }
+                    deepAssign(target[i], source[i])
                 }
-                else
+                else if (target[i] != source[i])
                 {
                     target[i] = source[i]
                 }
             }
-        }
-    }
-
-    static requestFromElement(element)
-    {
-        return new Request(
-            element.action || options.href || null,
+            else
             {
-                method: element.method || null
+                target[i] = source[i]
             }
-        )
-    }
-
-    static form(element)
-    {
-        return element.tagName == 'FORM' ? element : element.form
-    }
-
-    static capitalize(str)
-    {
-        return str[0].toUpperCase() + str.substr(1).toLowerCase()
-    }
-
-    static camelCase(str)
-    {
-        return str.toLowerCase().replace(/[^a-zA-Z0-9]+(.)/g, (match, chr) => chr.toUpperCase())
+        }
     }
 }
 
-export { Util }
+function requestFromElement(element)
+{
+    return new Request(
+        element.action || options.href || null,
+        {
+            method: element.method || null
+        }
+    )
+}
+
+function form(element)
+{
+    return element.tagName == 'FORM' ? element : element.form
+}
+
+function capitalize(str)
+{
+    return str[0].toUpperCase() + str.substr(1).toLowerCase()
+}
+
+function camelCase(str)
+{
+    return str.toLowerCase().replace(/[^a-zA-Z0-9]+(.)/g, (_match, chr) => chr.toUpperCase())
+}
+
+export { deepAssign, requestFromElement, form, capitalize, camelCase }

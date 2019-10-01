@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <base href="/">
+        <title>Action UI SPA</title>
+    </head>
+    <body>
+        <h1>Single-Page Application</h1>
+        <main ui-view="controller"></main>
+        <script type="module">
+            import { App } from './static/apex/app.js'
+            let router = new Router()
+            router.navigate(location.pathname)
+        </script>
+    </body>
+</html>

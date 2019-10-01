@@ -1,16 +1,16 @@
-'use strict'
-import { Util } from './util.js'
+import * as Util from './util.js'
+import { Controller } from './controller.js'
+import { View } from './view.js'
 import { ViewHandlebars } from './view.handlebars.js'
-//import { View } from './view.js'
 
 class Router
 {
-    constructor(controllers, view, state = {})
+    constructor(controllers = {}, view = 'controller', state = {})
     {
         this.controllers = controllers
         this._instance = {}
-        this._view = view
-        this._state = state
+        this.view = (view instanceof View) ? view : new View(view)
+        this.state = state
         window.addEventListener('popstate', this.changeState.bind(this))
     }
 
@@ -24,7 +24,7 @@ class Router
         let controller = this.controllerName(pathController)
         let model = { data: data }
 
-        if (!this.controllers[controller])
+        if (! this.controllers[controller])
         {
             pathController = _options.defaultController
             controller = this.controllerName(pathController)
@@ -33,9 +33,15 @@ class Router
 
         if (! this._instance[controller])
         {
-            this._instance[controller] = new this.controllers[controller](this._view)
+            if ( this.controllers[controller] )
+            {
+                this._instance[controller] = new this.controllers[controller](this.view)
+            }
+            else
+            {
+                this._instance[controller] = new Controller(this.view)
+            }
         }
-        
 
         pathMethod = pathMethod || _options.defaultMethod
         let result = null
@@ -45,7 +51,13 @@ class Router
         {
             this._instance[controller].view.html = template
         }
+
+        if (_options.autoload && ! (this._instance[controller][method] instanceof Function))
+        {
+            method = _options.autoloadMethod
+        }
         
+        model.dev = location.host == _options.devHost
         model.view = template
         model.controller = pathController
         model.method = pathMethod
@@ -66,27 +78,22 @@ class Router
             args.push(search)
             args.push(data)
 
-            this._instance[controller].view.model.clear().sync(model)
+            this._instance[controller].view.model
+                .clear()
+                .sync(model)
+                .clearChanges()
+            
             result = this._instance[controller][method]
                 .apply(this._instance[controller], args)
         }
         catch(e)
         {
-            if ( this._instance[controller].view instanceof ViewHandlebars)
-            {
-                this._instance[controller].view.html = _options.errorView
-            }
-
-            model.view = _options.errorView
-            model.path = path.join('/')
-
-            this._instance[controller].view.model.clear().sync(model)
-            result = this._instance[controller][_options.errorMethod]()
+            result = this.handleError(controller, model, path)
         }
 
         if (location.pathname != route)
         {
-            Util.deepAssign(this._state,
+            Util.deepAssign(this.state,
             {
                 route: route,
                 controller: pathController,
@@ -95,19 +102,55 @@ class Router
                 search: search
             })
 
-            history.pushState(this._state, null, route)
+            history.pushState(this.state, null, route)
         }
 
         if ( result instanceof Promise )
         {
-            let viewContainer = document.querySelectorAll('[ui-view="' + this._view.name + '"]')
+            let viewContainer = document.querySelectorAll('[ui-view="' + this.view.name + '"]')
 
-            viewContainer.forEach(el => el.classList.add(_options.cssClass.loading))
+            this.handleLoading(viewContainer, true)
 
-            result.then(() => viewContainer.forEach(el => el.classList.remove(_options.cssClass.loading)))
+            result
+                .then(() => this.handleLoading(viewContainer, false))
+                .catch(e =>
+                {
+                    this.handleLoading(viewContainer, false)
+                    this.handleError(controller, model, path, e)
+                    throw e
+                })
         }
 
         return result
+    }
+
+    handleLoading(elements, loading)
+    {
+        if ( loading )
+        {
+            elements.forEach(el => el.classList.add(_options.cssClass.loading))
+        }
+        else
+        {
+            elements.forEach(el => el.classList.remove(_options.cssClass.loading))
+        }
+
+        return this
+    }
+
+    handleError(controller, model, path, error)
+    {
+        if ( this._instance[controller].view instanceof ViewHandlebars)
+        {
+            this._instance[controller].view.html = _options.errorView
+        }
+
+        model.error = error
+        model.view = _options.errorView
+        model.path = path.join('/')
+
+        this._instance[controller].view.model.clear().sync(model).clearChanges()
+        return this._instance[controller][_options.errorMethod]()
     }
 
     sanitizePath(path)
@@ -166,12 +209,15 @@ class Router
 }
 
 let _options = {
+    autoload: true,
     verbose: false,
     cssClass: { 'loading': 'loading', 'success': 'success', 'fail': 'fail' },
     defaultController: 'default',
+    autoloadMethod: '__autoload',
     defaultMethod: 'index',
-    errorMethod: '_404',
-    errorView: '404'
+    errorMethod: '__error',
+    errorView: 'error',
+    devHost: 'localhost'
 }
 
 export { Router }

@@ -1,5 +1,4 @@
-﻿'use strict'
-import { Util } from './util.js'
+﻿import * as Util from './util.js'
 import { Model } from './model.js'
 
 /**
@@ -283,8 +282,8 @@ class Action
 let _cache = {}
 let _options = {
     verbose: false,
-    autoCreate: false,
-    autoCache: false,
+    autoCreate: true,
+    autoCache: true,
     cssClass: { 'loading': 'loading', 'success': 'success', 'fail': 'fail' },
     eventBefore: new CustomEvent('action.before', { bubbles: true, detail: { type: 'before', name: null, data: null, model: null } }),
     eventAfter: new CustomEvent('action.after' , { bubbles: true, detail: { type: 'after' , name: null, data: null, success: null, model: null } })

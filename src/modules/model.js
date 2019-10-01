@@ -1,5 +1,4 @@
-'use strict'
-import { Util } from "./util.js";
+import * as Util from "./util.js";
 
 /**
  * Model
@@ -66,12 +65,14 @@ class Model
     watch(callback)
     {
         _watchers.get(this).push(callback)
+        return this
     }
 
     clearChanges()
     {
         //console.log('clearChanges',this)
         _changes.set(this, {})
+        return this
     }
 
     // Trigger all watcher callbacks

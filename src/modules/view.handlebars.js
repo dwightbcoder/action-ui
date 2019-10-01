@@ -1,4 +1,3 @@
-'user strict'
 import { View } from './view.js'
 
 /**
@@ -41,9 +40,9 @@ class ViewHandlebars extends View
             {
                 let template = this._html + '.' + ViewHandlebars.options.extension
                 _promise = fetch(ViewHandlebars.options.basePath + template)
-                    .then((response) => { if (response.ok) return response.text() })
-                    .then((html) => this._html = Handlebars.compile(html))
-                    .catch((e) => console.error('Template not found: ' + template))
+                    .then(response => { if (response.ok) return response.text() })
+                    .then(html => this._html = Handlebars.compile(html))
+                    .catch(e => { throw new Error('Template not found: ' + template) })
             }
         }
         else

@@ -1,5 +1,10 @@
 # Action UI
+
 Action UI is a ES6 Javascript framework for building event-base user interfaces
+
+The goal of this package is to make decoupled event-driven API-powered websites and applications simpler to produce with minimal learning curve.
+
+Please review the documentation via the [Wiki](https://github.com/dwightbcoder/action-ui/wiki)
 
 ## Core Modules
 
