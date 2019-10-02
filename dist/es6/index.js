@@ -6,4 +6,5 @@ export { Model } from './modules/model.js'
 export { Router } from './modules/router.js'
 export { Util }
 export { View } from './modules/view.js'
+export { ViewFile } from './modules/view.file.js'
 export { ViewHandlebars } from './modules/view.handlebars.js'

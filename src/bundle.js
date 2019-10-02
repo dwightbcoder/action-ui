@@ -882,7 +882,7 @@ var ActionUI = (function (exports) {
             let controller = this.controllerName(pathController);
             let model = { data: data };
 
-            if (! _controllers[controller])
+            if (! this.controllers[controller])
             {
                 pathController = _options$4.defaultController;
                 controller = this.controllerName(pathController);
@@ -891,9 +891,9 @@ var ActionUI = (function (exports) {
             
             if (! _cache$2[controller])
             {
-                if ( _controllers[controller] )
+                if ( this.controllers[controller] )
                 {
-                    _cache$2[controller] = new _controllers[controller](this.view);
+                    _cache$2[controller] = new this.controllers[controller](this.view);
                 }
                 else
                 {
@@ -957,7 +957,7 @@ var ActionUI = (function (exports) {
 
             if (location.pathname != route)
             {
-                deepAssign(_state,
+                deepAssign(this.state,
                 {
                     route: route,
                     controller: pathController,
@@ -966,7 +966,7 @@ var ActionUI = (function (exports) {
                     search: search
                 });
 
-                history.pushState(_state, null, route);
+                history.pushState(this.state, null, route);
             }
 
             if ( result instanceof Promise )
@@ -1080,14 +1080,14 @@ var ActionUI = (function (exports) {
 
         // #region Properties
 
-        static get controllers() { return _ontrollers }
-        static set controllers(value) { _controllers = value; }
+        static get controllers() { return this.options.controllers }
+        static set controllers(value) { this.options.controllers = value; }
 
-        static get state() { return _state }
-        static set state(value) { _state = value; }
+        static get state() { return this.options.state }
+        static set state(value) { this.options.state = value; }
 
-        static get view() { if (! (_view instanceof View)) this.view = _view; return _view }
-        static set view(value) { _view = (value instanceof View) ? value : new ViewFile(value); }
+        static get view() { if (! (this.options.view instanceof View)) this.view = this.options.view; return this.options.view }
+        static set view(value) { this.options.view = (value instanceof View) ? value : new ViewFile(value); }
 
         static get options() { return _options$4 }
         static set options(value) { deepAssign(_options$4, value); }
@@ -1095,11 +1095,11 @@ var ActionUI = (function (exports) {
         // #endregion
     }
 
-    let _controllers = {};
-    let _view = 'controller';
-    let _state = {};
     let _cache$2 = {};
     let _options$4 = {
+        controllers: {},
+        view: 'controller',
+        state: {},
         autoload: true,
         verbose: false,
         cssClass: { 'loading': 'loading', 'success': 'success', 'fail': 'fail' },

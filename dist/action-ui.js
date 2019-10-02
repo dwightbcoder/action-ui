@@ -871,15 +871,15 @@ var ActionUI = function (exports) {
         data: data
       };
 
-      if (!_controllers[controller]) {
+      if (!this.controllers[controller]) {
         pathController = _options$4.defaultController;
         controller = this.controllerName(pathController);
         pathMethod = route == '/' ? _options$4.defaultMethod : path[0];
       }
 
       if (!_cache$2[controller]) {
-        if (_controllers[controller]) {
-          _cache$2[controller] = new _controllers[controller](this.view);
+        if (this.controllers[controller]) {
+          _cache$2[controller] = new this.controllers[controller](this.view);
         } else {
           _cache$2[controller] = new Controller(this.view);
         }
@@ -928,14 +928,14 @@ var ActionUI = function (exports) {
       }
 
       if (location.pathname != route) {
-        deepAssign(_state, {
+        deepAssign(this.state, {
           route: route,
           controller: pathController,
           method: pathMethod,
           data: Object.assign({}, data),
           search: search
         });
-        history.pushState(_state, null, route);
+        history.pushState(this.state, null, route);
       }
 
       if (result instanceof Promise) {
@@ -1034,28 +1034,28 @@ var ActionUI = function (exports) {
 
 
     static get controllers() {
-      return _ontrollers;
+      return this.options.controllers;
     }
 
     static set controllers(value) {
-      _controllers = value;
+      this.options.controllers = value;
     }
 
     static get state() {
-      return _state;
+      return this.options.state;
     }
 
     static set state(value) {
-      _state = value;
+      this.options.state = value;
     }
 
     static get view() {
-      if (!(_view instanceof View)) this.view = _view;
-      return _view;
+      if (!(this.options.view instanceof View)) this.view = this.options.view;
+      return this.options.view;
     }
 
     static set view(value) {
-      _view = value instanceof View ? value : new ViewFile(value);
+      this.options.view = value instanceof View ? value : new ViewFile(value);
     }
 
     static get options() {
@@ -1069,11 +1069,11 @@ var ActionUI = function (exports) {
 
   }
 
-  var _controllers = {};
-  var _view = 'controller';
-  var _state = {};
   var _cache$2 = {};
   var _options$4 = {
+    controllers: {},
+    view: 'controller',
+    state: {},
     autoload: true,
     verbose: false,
     cssClass: {

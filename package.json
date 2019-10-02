@@ -1,6 +1,6 @@
 {
   "name": "@dwightbcoder/action-ui",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Action UI is a Javascript framework for building event-base user interfaces",
   "main": "dist/action-ui.min.js",
   "directories": {
@@ -11,7 +11,7 @@
     "rollup": "rollup src/index.js --format iife --name ActionUI --file src/bundle.js",
     "babel:dev": "NODE_ENV=dev babel src/bundle.js -d dist && mv dist/bundle.js dist/action-ui.js",
     "babel:prod": "NODE_ENV=production babel src/bundle.js -d dist && mv dist/bundle.js dist/action-ui.min.js",
-    "build": "npm run rollup && npm run babel:dev && npm run babel:prod && cp -a src dist/es6",
+    "build": "npm run rollup && npm run babel:dev && npm run babel:prod && rm -r dist/es6 && cp -a src dist/es6",
     "build:example": "npm run build && npm run build:example1 && npm run build:example2",
     "build:example1": "cp dist/action-ui.min.js example/spa/action-ui.min.js",
     "build:example2": "cp dist/action-ui.min.js example/spa-handlebars/action-ui.min.js",

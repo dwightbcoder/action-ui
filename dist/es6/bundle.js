@@ -736,48 +736,106 @@ var ActionUI = (function (exports) {
     };
 
     /**
-     * ViewHandlebars
-     * @description View that uses Handlebars templates instead of html
-     * @update Support for pre-compiled templates
+     * ViewFile
+     * @description View that fetches html from a file
      */
-    class ViewHandlebars extends View
+    class ViewFile extends View
     {
-        constructor(name, template, model)
+        constructor(name, file, model)
         {
             if (arguments.length == 2)
             {
-                model = template;
-                template = undefined;
+                model = file;
+                file = undefined;
             }
 
-            if (!template)
+            if (!file)
             {
-                template = name;
+                file = name;
             }
 
-            super(name, template, model);
+            super(name, null, model);
+
+            this.file = file;
         }
 
         render()
         {
-            if ( ViewHandlebars.options.verbose ) console.info( 'ViewHandlebars.render()', this.name, {view:this} );
+            if ( _options$2.verbose ) console.info( 'ViewFile.render()', this.name, {view:this} );
+
+            var _promise = this._html == null ? this.fetch() : Promise.resolve();
+            return _promise.then(() => super.render())
+        }
+
+        fetch()
+        {
+            return fetch(this.fullPath)
+                .then(response => {if (response.ok) { return response.text() } else { throw new Error(response.statusText) }})
+                .then(html => this._html = html)
+                .catch(e => { throw new Error('File not found: ' + this.fileName) })
+        }
+
+        get fileName() { return this.file + '.' + this.__proto__.constructor.options.extension }
+        get fullPath() { return this.__proto__.constructor.options.basePath + this.fileName }
+
+        get file() { return this._file }
+        set file(file)
+        {
+            if ( file != this._file )
+            {
+                this._html = null;
+            }
+            this._file = file;
+        }
+
+        // #region Static methods
+
+        // View factory
+        static create(options)
+        {
+            if ( options.file )
+            {
+                options.file = options.name;
+            }
+
+            return new ViewFile(options.name, options.file, options.model)
+        }
+
+        static get options() { return _options$2 }
+        static set options(value) { deepAssign(_options$2, value); }
+
+        // #endregion
+    }
+
+    let _options$2 = {
+        basePath: 'view/',
+        extension: 'html'
+    };
+    ViewFile.options = View.options;
+
+    /**
+     * ViewHandlebars
+     * @description View that uses Handlebars templates instead of html
+     * @update Support for pre-compiled templates
+     */
+    class ViewHandlebars extends ViewFile
+    {
+        render()
+        {
+            if ( _options$3.verbose ) console.info( 'ViewHandlebars.render()', this.name, {view:this} );
 
             var _promise = null;
 
-            if ('string' == (typeof this._html))
+            if (this._html == null)
             {
-                if (Handlebars.templates && Handlebars.templates[this._html])
+                if (Handlebars.templates && Handlebars.templates[this.file])
                 {
-                    this._html = Handlebars.templates[this._html];
+                    this._html = Handlebars.templates[this.file];
                     _promise = Promise.resolve();
                 }
                 else
                 {
-                    let template = this._html + '.' + ViewHandlebars.options.extension;
-                    _promise = fetch(ViewHandlebars.options.basePath + template)
-                        .then(response => { if (response.ok) return response.text() })
-                        .then(html => this._html = Handlebars.compile(html))
-                        .catch(e => { throw new Error('Template not found: ' + template) });
+                    _promise = this.fetch().then(() => this._html = Handlebars.compile(this._html));
                 }
             }
             else
@@ -790,37 +848,33 @@ var ActionUI = (function (exports) {
 
         // #region Static methods
 
-        // View factory
-        static create(options)
-        {
-            if ( options.template )
-            {
-                options.template = options.name;
-            }
-
-            return new ViewHandlebars(options.name, options.template, options.model)
-        }
+        static get options() { return _options$3 }
+        static set options(value) { deepAssign(_options$3, value); }
 
         // #endregion
     }
 
-    ViewHandlebars.options.basePath = '';
+    let _options$3 = {};
+    ViewHandlebars.options = ViewFile.options;
     ViewHandlebars.options.extension = 'hbs';
 
     class Router
     {
-        constructor(controllers = {}, view = 'controller', state = {})
+        static start()
         {
-            this.controllers = controllers;
-            this._instance = {};
-            this.view = (view instanceof View) ? view : new View(view);
-            this.state = state;
-            window.addEventListener('popstate', this.changeState.bind(this));
+            window.addEventListener('popstate', this.onPopState.bind(this));
+
+            if ( _options$4.interceptLinks )
+            {
+                document.addEventListener('click', this.onClick.bind(this));
+            }
+
+            this.navigate(location.pathname);
         }
 
-        navigate(route, data = {})
+        static navigate(route, data = {})
         {
-            if (_options$2.verbose) console.info('Router.navigate()', {router:this, route:route, data:data});
+            if (_options$4.verbose) console.info('Router.navigate()', {router:this, route:route, data:data});
 
             let path = this.sanitizePath(route);
             let pathController = path[0];
@@ -830,41 +884,47 @@ var ActionUI = (function (exports) {
 
             if (! this.controllers[controller])
             {
-                pathController = _options$2.defaultController;
+                pathController = _options$4.defaultController;
                 controller = this.controllerName(pathController);
-                pathMethod = route == '/' ? _options$2.defaultMethod : path[0];
+                pathMethod = route == '/' ? _options$4.defaultMethod : path[0];
             }
             
-            if (! this._instance[controller])
+            if (! _cache$2[controller])
             {
                 if ( this.controllers[controller] )
                 {
-                    this._instance[controller] = new this.controllers[controller](this.view);
+                    _cache$2[controller] = new this.controllers[controller](this.view);
                 }
                 else
                 {
-                    this._instance[controller] = new Controller(this.view);
+                    _cache$2[controller] = new Controller(this.view);
                 }
             }
 
-            pathMethod = pathMethod || _options$2.defaultMethod;
+            pathMethod = pathMethod || _options$4.defaultMethod;
             let result = null;
-            let template = pathController + '/' + pathMethod;
+            let view = pathController + _options$4.pathSeparator + pathMethod;
             let method = camelCase(pathMethod);
-            if ( this._instance[controller].view instanceof ViewHandlebars)
+
+            if ( _cache$2[controller].view instanceof ViewFile)
             {
-                this._instance[controller].view.html = template;
+                _cache$2[controller].view.file = view;
+            }
+            else if ( _cache$2[controller].view instanceof ViewHandlebars)
+            {
+                _cache$2[controller].view.html = view;
             }
 
-            if (_options$2.autoload && ! (this._instance[controller][method] instanceof Function))
+            if (_options$4.autoload && ! (_cache$2[controller][method] instanceof Function))
             {
-                method = _options$2.autoloadMethod;
+                method = _options$4.autoloadMethod;
             }
             
-            model.dev = location.host == _options$2.devHost;
-            model.view = template;
+            model.dev = location.host == _options$4.devHost;
+            model.view = view;
             model.controller = pathController;
             model.method = pathMethod;
+            model.path = Array.from(path);
 
             // Query string to object
             let search = location.search.substring(1);
@@ -882,13 +942,13 @@ var ActionUI = (function (exports) {
                 args.push(search);
                 args.push(data);
 
-                this._instance[controller].view.model
+                _cache$2[controller].view.model
                     .clear()
                     .sync(model)
                     .clearChanges();
                 
-                result = this._instance[controller][method]
-                    .apply(this._instance[controller], args);
+                result = _cache$2[controller][method]
+                    .apply(_cache$2[controller], args);
             }
             catch(e)
             {
@@ -928,44 +988,48 @@ var ActionUI = (function (exports) {
             return result
         }
 
-        handleLoading(elements, loading)
+        static handleLoading(elements, loading)
         {
             if ( loading )
             {
-                elements.forEach(el => el.classList.add(_options$2.cssClass.loading));
+                elements.forEach(el => el.classList.add(_options$4.cssClass.loading));
             }
             else
             {
-                elements.forEach(el => el.classList.remove(_options$2.cssClass.loading));
+                elements.forEach(el => el.classList.remove(_options$4.cssClass.loading));
             }
 
             return this
         }
 
-        handleError(controller, model, path, error)
+        static handleError(controller, model, path, error)
         {
-            if ( this._instance[controller].view instanceof ViewHandlebars)
+            model.error = error;
+            model.view = model.controller + _options$4.pathSeparator + _options$4.errorView;
+            model.path = path.join(_options$4.pathSeparator);
+
+            if ( _cache$2[controller].view instanceof ViewFile)
             {
-                this._instance[controller].view.html = _options$2.errorView;
+                _cache$2[controller].view.file = (_options$4.useControllerErrorViews ? model.controller + _options$4.pathSeparator : '') + _options$4.errorView;
+            }
+            else
+            {
+                _cache$2[controller].view.html = 'Error loading ' + model.path;
             }
 
-            model.error = error;
-            model.view = _options$2.errorView;
-            model.path = path.join('/');
-
-            this._instance[controller].view.model.clear().sync(model).clearChanges();
-            return this._instance[controller][_options$2.errorMethod]()
+            _cache$2[controller].view.model.clear().sync(model).clearChanges();
+            return _cache$2[controller][_options$4.errorMethod]()
         }
 
-        sanitizePath(path)
+        static sanitizePath(path)
         {
-            if (_options$2.verbose) console.info('Router.sanitizePath()', {router:this, path:path});
+            if (_options$4.verbose) console.info('Router.sanitizePath()', {router:this, path:path});
 
             if ('string' == (typeof path))
             {
                 path = path.split('/');
                 path.shift();
-                path[0] = path[0] || _options$2.defaultController;
+                path[0] = path[0] || _options$4.defaultController;
             }
 
             for (let i in path)
@@ -975,22 +1039,32 @@ var ActionUI = (function (exports) {
 
             if ( path.length == 1 )
             {
-                path.push(_options$2.defaultMethod);
+                path.push(_options$4.defaultMethod);
             }
 
             return path
         }
 
-        controllerName(name)
+        static controllerName(name)
         {
-            if (_options$2.verbose) console.info('Router.controllerName()', {router:this, name:name});
+            if (_options$4.verbose) console.info('Router.controllerName()', {router:this, name:name});
 
             return capitalize(camelCase(name)) + 'Controller'
         }
 
-        changeState(e)
+        static onClick(e)
         {
-            if (_options$2.verbose) console.info('Router.changeState()', {router:this, event:e});
+            // Intercept links
+            if (e.target.tagName == 'A' && e.target.pathname)
+            {
+                e.preventDefault();
+                this.navigate(e.target.pathname, Object.assign({}, e.target.dataset));
+            }
+        }
+
+        static onPopState(e)
+        {
+            if (_options$4.verbose) console.info('Router.changeState()', {router:this, event:e});
 
             let route = location.pathname;
             let data = {};
@@ -1004,15 +1078,28 @@ var ActionUI = (function (exports) {
             this.navigate(route, data);
         }
 
-        // #region Static methods
+        // #region Properties
 
-        static get options() { return _options$2 }
-        static set options(value) { deepAssign(_options$2, value); }
+        static get controllers() { return this.options.controllers }
+        static set controllers(value) { this.options.controllers = value; }
+
+        static get state() { return this.options.state }
+        static set state(value) { this.options.state = value; }
+
+        static get view() { if (! (this.options.view instanceof View)) this.view = this.options.view; return this.options.view }
+        static set view(value) { this.options.view = (value instanceof View) ? value : new ViewFile(value); }
+
+        static get options() { return _options$4 }
+        static set options(value) { deepAssign(_options$4, value); }
 
         // #endregion
     }
 
-    let _options$2 = {
+    let _cache$2 = {};
+    let _options$4 = {
+        controllers: {},
+        view: 'controller',
+        state: {},
         autoload: true,
         verbose: false,
         cssClass: { 'loading': 'loading', 'success': 'success', 'fail': 'fail' },
@@ -1021,7 +1108,10 @@ var ActionUI = (function (exports) {
         defaultMethod: 'index',
         errorMethod: '__error',
         errorView: 'error',
-        devHost: 'localhost'
+        useControllerErrorViews: false,
+        devHost: 'localhost',
+        interceptLinks: true,
+        pathSeparator: '/'
     };
 
     exports.Action = Action;
@@ -1031,6 +1121,7 @@ var ActionUI = (function (exports) {
     exports.Router = Router;
     exports.Util = util;
     exports.View = View;
+    exports.ViewFile = ViewFile;
     exports.ViewHandlebars = ViewHandlebars;
 
     return exports;

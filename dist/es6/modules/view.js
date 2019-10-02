@@ -1,4 +1,4 @@
-import * as Util from './util.js'
+import { deepAssign } from './util.js'
 import { Model } from './model.js'
 
 /**
@@ -110,7 +110,7 @@ class View
     // Render all views
 
     static get options() { return _options }
-    static set options(value) { Util.deepAssign(_options, value) }
+    static set options(value) { deepAssign(_options, value) }
 
     // #endregion
 }

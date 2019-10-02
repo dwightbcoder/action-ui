@@ -1,20 +1,24 @@
 import * as Util from './util.js'
 import { Controller } from './controller.js'
 import { View } from './view.js'
+import { ViewFile } from './view.file.js'
 import { ViewHandlebars } from './view.handlebars.js'
 
 class Router
 {
-    constructor(controllers = {}, view = 'controller', state = {})
+    static start()
     {
-        this.controllers = controllers
-        this._instance = {}
-        this.view = (view instanceof View) ? view : new View(view)
-        this.state = state
-        window.addEventListener('popstate', this.changeState.bind(this))
+        window.addEventListener('popstate', this.onPopState.bind(this))
+
+        if ( _options.interceptLinks )
+        {
+            document.addEventListener('click', this.onClick.bind(this))
+        }
+
+        this.navigate(location.pathname)
     }
 
-    navigate(route, data = {})
+    static navigate(route, data = {})
     {
         if (_options.verbose) console.info('Router.navigate()', {router:this, route:route, data:data})
 
@@ -31,36 +35,42 @@ class Router
             pathMethod = route == '/' ? _options.defaultMethod : path[0]
         }
         
-        if (! this._instance[controller])
+        if (! _cache[controller])
         {
             if ( this.controllers[controller] )
             {
-                this._instance[controller] = new this.controllers[controller](this.view)
+                _cache[controller] = new this.controllers[controller](this.view)
             }
             else
             {
-                this._instance[controller] = new Controller(this.view)
+                _cache[controller] = new Controller(this.view)
             }
         }
 
         pathMethod = pathMethod || _options.defaultMethod
         let result = null
-        let template = pathController + '/' + pathMethod
+        let view = pathController + _options.pathSeparator + pathMethod
         let method = Util.camelCase(pathMethod)
-        if ( this._instance[controller].view instanceof ViewHandlebars)
+
+        if ( _cache[controller].view instanceof ViewFile)
         {
-            this._instance[controller].view.html = template
+            _cache[controller].view.file = view
+        }
+        else if ( _cache[controller].view instanceof ViewHandlebars)
+        {
+            _cache[controller].view.html = view
         }
 
-        if (_options.autoload && ! (this._instance[controller][method] instanceof Function))
+        if (_options.autoload && ! (_cache[controller][method] instanceof Function))
         {
             method = _options.autoloadMethod
         }
         
         model.dev = location.host == _options.devHost
-        model.view = template
+        model.view = view
         model.controller = pathController
         model.method = pathMethod
+        model.path = Array.from(path)
 
         // Query string to object
         let search = location.search.substring(1)
@@ -78,13 +88,13 @@ class Router
             args.push(search)
             args.push(data)
 
-            this._instance[controller].view.model
+            _cache[controller].view.model
                 .clear()
                 .sync(model)
                 .clearChanges()
             
-            result = this._instance[controller][method]
-                .apply(this._instance[controller], args)
+            result = _cache[controller][method]
+                .apply(_cache[controller], args)
         }
         catch(e)
         {
@@ -124,7 +134,7 @@ class Router
         return result
     }
 
-    handleLoading(elements, loading)
+    static handleLoading(elements, loading)
     {
         if ( loading )
         {
@@ -138,22 +148,26 @@ class Router
         return this
     }
 
-    handleError(controller, model, path, error)
+    static handleError(controller, model, path, error)
     {
-        if ( this._instance[controller].view instanceof ViewHandlebars)
+        model.error = error
+        model.view = model.controller + _options.pathSeparator + _options.errorView
+        model.path = path.join(_options.pathSeparator)
+
+        if ( _cache[controller].view instanceof ViewFile)
         {
-            this._instance[controller].view.html = _options.errorView
+            _cache[controller].view.file = (_options.useControllerErrorViews ? model.controller + _options.pathSeparator : '') + _options.errorView
+        }
+        else
+        {
+            _cache[controller].view.html = 'Error loading ' + model.path
         }
 
-        model.error = error
-        model.view = _options.errorView
-        model.path = path.join('/')
-
-        this._instance[controller].view.model.clear().sync(model).clearChanges()
-        return this._instance[controller][_options.errorMethod]()
+        _cache[controller].view.model.clear().sync(model).clearChanges()
+        return _cache[controller][_options.errorMethod]()
     }
 
-    sanitizePath(path)
+    static sanitizePath(path)
     {
         if (_options.verbose) console.info('Router.sanitizePath()', {router:this, path:path})
 
@@ -177,14 +191,24 @@ class Router
         return path
     }
 
-    controllerName(name)
+    static controllerName(name)
     {
         if (_options.verbose) console.info('Router.controllerName()', {router:this, name:name})
 
         return Util.capitalize(Util.camelCase(name)) + 'Controller'
     }
 
-    changeState(e)
+    static onClick(e)
+    {
+        // Intercept links
+        if (e.target.tagName == 'A' && e.target.pathname)
+        {
+            e.preventDefault()
+            this.navigate(e.target.pathname, Object.assign({}, e.target.dataset))
+        }
+    }
+
+    static onPopState(e)
     {
         if (_options.verbose) console.info('Router.changeState()', {router:this, event:e})
 
@@ -200,7 +224,16 @@ class Router
         this.navigate(route, data)
     }
 
-    // #region Static methods
+    // #region Properties
+
+    static get controllers() { return this.options.controllers }
+    static set controllers(value) { this.options.controllers = value }
+
+    static get state() { return this.options.state }
+    static set state(value) { this.options.state = value }
+
+    static get view() { if (! (this.options.view instanceof View)) this.view = this.options.view; return this.options.view }
+    static set view(value) { this.options.view = (value instanceof View) ? value : new ViewFile(value) }
 
     static get options() { return _options }
     static set options(value) { Util.deepAssign(_options, value) }
@@ -208,7 +241,11 @@ class Router
     // #endregion
 }
 
+let _cache = {}
 let _options = {
+    controllers: {},
+    view: 'controller',
+    state: {},
     autoload: true,
     verbose: false,
     cssClass: { 'loading': 'loading', 'success': 'success', 'fail': 'fail' },
@@ -217,7 +254,10 @@ let _options = {
     defaultMethod: 'index',
     errorMethod: '__error',
     errorView: 'error',
-    devHost: 'localhost'
+    useControllerErrorViews: false,
+    devHost: 'localhost',
+    interceptLinks: true,
+    pathSeparator: '/'
 }
 
 export { Router }

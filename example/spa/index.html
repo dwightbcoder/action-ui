@@ -13,8 +13,11 @@
         <script>
             // Configure router for simple flat view hierarchy
             ActionUI.Router.options.pathSeparator = '.'
-            ActionUI.ViewFile.options.basePath = ''
-            ActionUI.ViewFile.options.extension = 'view.html'
+            ActionUI.ViewFile.options =
+            {
+                basePath: '',
+                extension: 'view.html'
+            }
 
             // Start routing
             ActionUI.Router.start()

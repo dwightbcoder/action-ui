@@ -12,7 +12,7 @@
         <main ui-view="controller"></main>
         <script>
             // Configure router to use handlebars views
-            ActionUI.Router.view = new ActionUI.ViewHandlebars('controller')
+            ActionUI.Router.options.view = new ActionUI.ViewHandlebars('controller')
 
             // Start routing
             ActionUI.Router.start()
