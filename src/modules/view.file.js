@@ -74,7 +74,7 @@ class ViewFile extends View
 }
 
 let _options = {
-    basePath: '',
+    basePath: 'view/',
     extension: 'html'
 }
 ViewFile.options = View.options

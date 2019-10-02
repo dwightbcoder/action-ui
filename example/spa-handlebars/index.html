@@ -3,18 +3,16 @@
     <head>
         <meta charset="utf-8" />
         <base href="/">
-        <title>Action UI SPA (Basic)</title>
+        <title>Action UI SPA (HBS)</title>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/handlebars.js/4.4.0/handlebars.min.js"></script>
         <script src="action-ui.min.js"></script>
     </head>
     <body>
-        <h1>Basic Single-Page Application</h1>
+        <h1>Handlebars SPA</h1>
         <main ui-view="controller"></main>
         <script>
-            // Configure router for simple flat view hierarchy
-            ActionUI.Router.options.pathSeparator = '.'
-            ActionUI.ViewFile.options.basePath = ''
-            ActionUI.ViewFile.options.extension = 'view.html'
+            // Configure router to use handlebars views
+            ActionUI.Router.view = new ActionUI.ViewHandlebars('controller')
 
             // Start routing
             ActionUI.Router.start()
