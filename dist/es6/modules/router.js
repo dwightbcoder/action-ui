@@ -1,7 +1,6 @@
 import * as Util from './util.js'
 import { Controller } from './controller.js'
 import { View } from './view.js'
-import { ViewFile } from './view.file.js'
 import { ViewHandlebars } from './view.handlebars.js'
 
 class Router
@@ -10,7 +9,7 @@ class Router
     {
         this.controllers = controllers
         this._instance = {}
-        this.view = (view instanceof View) ? view : new ViewFile(view)
+        this.view = (view instanceof View) ? view : new View(view)
         this.state = state
         window.addEventListener('popstate', this.changeState.bind(this))
     }
@@ -46,16 +45,11 @@ class Router
 
         pathMethod = pathMethod || _options.defaultMethod
         let result = null
-        let view = pathController + '/' + pathMethod
+        let template = pathController + '/' + pathMethod
         let method = Util.camelCase(pathMethod)
-
-        if ( this._instance[controller].view instanceof ViewFile)
+        if ( this._instance[controller].view instanceof ViewHandlebars)
         {
-            this._instance[controller].view.file = view
-        }
-        else if ( this._instance[controller].view instanceof ViewHandlebars)
-        {
-            this._instance[controller].view.html = view
+            this._instance[controller].view.html = template
         }
 
         if (_options.autoload && ! (this._instance[controller][method] instanceof Function))
@@ -64,7 +58,7 @@ class Router
         }
         
         model.dev = location.host == _options.devHost
-        model.view = view
+        model.view = template
         model.controller = pathController
         model.method = pathMethod
 
@@ -146,11 +140,7 @@ class Router
 
     handleError(controller, model, path, error)
     {
-        if ( this._instance[controller].view instanceof ViewFile)
-        {
-            this._instance[controller].view.file = _options.errorView
-        }
-        else if ( this._instance[controller].view instanceof ViewHandlebars)
+        if ( this._instance[controller].view instanceof ViewHandlebars)
         {
             this._instance[controller].view.html = _options.errorView
         }

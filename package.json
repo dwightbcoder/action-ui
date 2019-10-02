@@ -1,12 +1,17 @@
 {
   "name": "@dwightbcoder/action-ui",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Action UI is a Javascript framework for building event-base user interfaces",
-  "main": "src/index.js",
+  "main": "dist/index.js",
   "directories": {
     "example": "example"
   },
+  "prepublish": "npm run build",
   "scripts": {
+    "rollup": "rollup src/index.js --format iife --name ActionUI --file src/bundle.js",
+    "babel:dev": "NODE_ENV=dev babel src/bundle.js -d dist && mv dist/bundle.js dist/action-ui.js",
+    "babel:prod": "NODE_ENV=production babel src/bundle.js -d dist && mv dist/bundle.js dist/action-ui.min.js",
+    "build": "npm run rollup && npm run babel:dev && npm run babel:prod && cp -a src dist/es6",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -28,5 +33,12 @@
   "bugs": {
     "url": "https://github.com/dwightbcoder/action-ui/issues"
   },
-  "homepage": "https://github.com/dwightbcoder/action-ui#readme"
+  "homepage": "https://github.com/dwightbcoder/action-ui#readme",
+  "devDependencies": {
+    "@babel/cli": "^7.6.2",
+    "@babel/core": "^7.6.2",
+    "@babel/preset-env": "^7.6.2",
+    "babel-preset-minify": "^0.5.1"
+  },
+  "dependencies": {}
 }

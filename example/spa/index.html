@@ -2,15 +2,17 @@
 <html>
     <head>
         <meta charset="utf-8" />
-        <base href="/">
+        <base href="/example/spa/">
         <title>Action UI SPA</title>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/handlebars.js/4.4.0/handlebars.min.js"></script>
+        <script src="/dist/action-ui.min.js"></script>
     </head>
     <body>
         <h1>Single-Page Application</h1>
         <main ui-view="controller"></main>
-        <script type="module">
-            import { App } from './static/apex/app.js'
-            let router = new Router()
+        <script>
+            //import * as ActionUI from '/src/index.js'
+            var router = new ActionUI.Router()
             router.navigate(location.pathname)
         </script>
     </body>
