@@ -9,7 +9,7 @@ function deepAssign(target, source)
         {
             if (target.hasOwnProperty(i))
             {
-                if (source[i] instanceof Object)
+                if (target[i] instanceof Object && source[i] instanceof Object)
                 {
                     deepAssign(target[i], source[i])
                 }

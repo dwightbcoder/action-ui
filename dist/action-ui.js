@@ -10,7 +10,7 @@ var ActionUI = function (exports) {
     for (var i in source) {
       if (source.hasOwnProperty(i)) {
         if (target.hasOwnProperty(i)) {
-          if (source[i] instanceof Object) {
+          if (target[i] instanceof Object && source[i] instanceof Object) {
             deepAssign(target[i], source[i]);
           } else if (target[i] != source[i]) {
             target[i] = source[i];
