@@ -11,7 +11,7 @@ Please review the documentation via the [Wiki](https://github.com/dwightbcoder/a
 By default actions attached to HTML elements _(via a `ui-action` attribute)_ will be configured automatically allowing Action UI to take control of form submission simply be setting an action name to the `<form>`:
 
 ```html
-<script src="@dwightbcoder/dist/action-ui.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@dwightbcoder/action-ui@1.0.6"></script>
 
 <form ui-action="save post" action="/post/store" method="POST">
     <label for="title">Title:</label><br>
@@ -68,7 +68,7 @@ Setup a simple `index.html`:
 <!DOCTYPE html>
 <html>
     <head>
-        <script src="@dwightbcoder/dist/action-ui.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@dwightbcoder/action-ui@1.0.6"></script>
     </head>
     <body>
         <header>Header</header>
