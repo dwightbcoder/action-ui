@@ -51,4 +51,14 @@ function camelCase(str)
     return str.toLowerCase().replace(/[^a-zA-Z0-9]+(.)/g, (_match, chr) => chr.toUpperCase())
 }
 
-export { deepAssign, requestFromElement, form, capitalize, camelCase }
+function firstMatchingParentElement( element, selector )
+{
+    if ( element == null || element.matches(selector) )
+    {
+        return element
+    }
+
+    return firstMatchingParentElement(element.parentElement, selector)
+}
+
+export { deepAssign, requestFromElement, form, capitalize, camelCase, firstMatchingParentElement }

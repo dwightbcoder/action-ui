@@ -137,26 +137,28 @@ class Action
     static init()
     {
         // General elements
-        document.addEventListener('click', (e) =>
+        document.addEventListener('click', e =>
         {
-            if (e.target.matches('[ui-action]') && e.target.tagName != 'FORM')
+            let target = Util.firstMatchingParentElement(e.target, '[ui-action]')
+            
+            if ( target && target.tagName != 'FORM')
             {
-                var actionName = e.target.getAttribute('ui-action')
+                var actionName = target.getAttribute('ui-action')
 
                 // Don't run the action if it's already running
                 if (actionName in _cache)
                 {
                     if (_cache[actionName].running == false)
                     {
-                        _cache[actionName].run(e.target)
+                        _cache[actionName].run(target)
                     }
                 }
                 else if ( _options.autoCreate )
                 {
                     // Auto create and run action
-                    var action = Action.createFromElement(e.target)
+                    var action = Action.createFromElement(target)
                     Action.cache(action)
-                    action.run(e.target)
+                    action.run(target)
                 }
                 else
                 {
@@ -166,7 +168,7 @@ class Action
         })
 
         // Form submission
-        document.addEventListener('submit', (e) =>
+        document.addEventListener('submit', e =>
         {
             if (e.target.matches('form[ui-action]'))
             {

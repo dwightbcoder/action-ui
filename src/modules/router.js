@@ -46,7 +46,7 @@ class Router
                 _cache[controller] = new Controller(this.view)
             }
         }
-
+        
         pathMethod = pathMethod || _options.defaultMethod
         let result = null
         let view = pathController + _options.pathSeparator + pathMethod

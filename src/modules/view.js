@@ -21,16 +21,28 @@ class View
         
         model.watch((changes) => this.update(changes))
 
-        if ( _options.autoCache )
+        if ( this.constructor.options.autoCache )
         {
             View.cache(this)
         }
     }
 
+    clear()
+    {
+        document
+            .querySelectorAll('[ui-view="'+this._name+'"]')
+            .forEach((_target) =>
+            {
+                _target.innerHTML = ''
+            })
+        
+        return this
+    }
+
     // When the model updates
     update(changes)
     {
-        if ( _options.verbose ) console.info( 'View.update()', this.name, {view:this, changes:changes} )
+        if ( this.constructor.options.verbose ) console.info( this.constructor.name + '.update()', this.name, {view:this, changes:changes} )
 
         this.render()
     }
@@ -42,7 +54,7 @@ class View
      */
     render()
     {
-        if ( _options.verbose ) console.info( 'View.render()', this.name, {view:this} )
+        if ( this.constructor.options.verbose ) console.info( this.constructor.name + '.render()', this.name, {view:this} )
 
         document
             .querySelectorAll('[ui-view="'+this._name+'"]')
@@ -52,24 +64,24 @@ class View
                 this.renderSubviews(_target)
             })
 
-            Object.assign(_options.eventRender.detail, {
+            Object.assign(this.constructor.options.eventRender.detail, {
                 view: this
             })
     
-            document.dispatchEvent(_options.eventRender)
+            document.dispatchEvent(this.constructor.options.eventRender)
         
         return Promise.resolve()
     }
 
     renderSubviews(parent)
     {
-        if ( _options.verbose ) console.info( 'View.renderSubviews()', this.name, {view:this, parent:parent} )
+        if ( this.constructor.options.verbose ) console.info( this.constructor.name + '.renderSubviews()', this.name, {view:this, parent:parent} )
 
         parent.querySelectorAll('[ui-view]')
         .forEach((_sub) =>
         {
             let viewName = _sub.getAttribute('ui-view')
-            let view = this.__proto__.constructor.cache(viewName)
+            let view = this.constructor.cache(viewName)
             if ( view )
             {
                 view.render()
@@ -87,24 +99,31 @@ class View
     // View factory
     static create(options)
     {
-        return new View(options.name, options.html, options.model)
+        if ( this.options.verbose ) console.info( this.name + ':create()', {options:options} )
+        return new this(options.name, options.html, options.model)
     }
 
     // Cache a view 
     static cache(view)
     {
+        if ( this.options.verbose ) console.info( this.name + ':cache()', {view:view} )
+
         if ('string' == typeof view)
         {
             return _cache[view]
         }
-
-        if (view.name in _cache)
+        else if ( view instanceof View )
         {
-            throw 'View name already exists: "' + view.name + '"'
+            if (view.name in _cache)
+            {
+                throw 'View name already exists: "' + view.name + '"'
+            }
+
+            _cache[view.name] = view
+            return this
         }
 
-        _cache[view.name] = view
-        return View
+        return _cache
     }
 
     // Render all views
@@ -118,7 +137,7 @@ class View
 let _cache = {}
 let _options = {
     verbose: false,
-    autoCache: false, // Automatically cache views when created
+    autoCache: true, // Automatically cache views when created
     eventRender: new CustomEvent('view.render', { bubbles: true, detail: { type: 'render', view: null } })
 }
 

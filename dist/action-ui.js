@@ -40,6 +40,14 @@ var ActionUI = function (exports) {
     return str.toLowerCase().replace(/[^a-zA-Z0-9]+(.)/g, (_match, chr) => chr.toUpperCase());
   }
 
+  function firstMatchingParentElement(element, selector) {
+    if (element == null || element.matches(selector)) {
+      return element;
+    }
+
+    return firstMatchingParentElement(element.parentElement, selector);
+  }
+
   var util =
   /*#__PURE__*/
   Object.freeze({
@@ -48,7 +56,8 @@ var ActionUI = function (exports) {
     requestFromElement: requestFromElement,
     form: form,
     capitalize: capitalize,
-    camelCase: camelCase
+    camelCase: camelCase,
+    firstMatchingParentElement: firstMatchingParentElement
   });
   /**
    * Model
@@ -296,18 +305,20 @@ var ActionUI = function (exports) {
     static init() {
       // General elements
       document.addEventListener('click', e => {
-        if (e.target.matches('[ui-action]') && e.target.tagName != 'FORM') {
-          var actionName = e.target.getAttribute('ui-action'); // Don't run the action if it's already running
+        var target = firstMatchingParentElement(e.target, '[ui-action]');
+
+        if (target && target.tagName != 'FORM') {
+          var actionName = target.getAttribute('ui-action'); // Don't run the action if it's already running
 
           if (actionName in _cache) {
             if (_cache[actionName].running == false) {
-              _cache[actionName].run(e.target);
+              _cache[actionName].run(target);
             }
           } else if (_options.autoCreate) {
             // Auto create and run action
-            var action = Action.createFromElement(e.target);
+            var action = Action.createFromElement(target);
             Action.cache(action);
-            action.run(e.target);
+            action.run(target);
           } else {
             throw new Error('Action not found: ' + actionName);
           }
@@ -602,14 +613,21 @@ var ActionUI = function (exports) {
       this._model = model;
       model.watch(changes => this.update(changes));
 
-      if (_options$1.autoCache) {
+      if (this.constructor.options.autoCache) {
         View.cache(this);
       }
+    }
+
+    clear() {
+      document.querySelectorAll('[ui-view="' + this._name + '"]').forEach(_target => {
+        _target.innerHTML = '';
+      });
+      return this;
     } // When the model updates
 
 
     update(changes) {
-      if (_options$1.verbose) console.info('View.update()', this.name, {
+      if (this.constructor.options.verbose) console.info(this.constructor.name + '.update()', this.name, {
         view: this,
         changes: changes
       });
@@ -623,29 +641,29 @@ var ActionUI = function (exports) {
 
 
     render() {
-      if (_options$1.verbose) console.info('View.render()', this.name, {
+      if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
         view: this
       });
       document.querySelectorAll('[ui-view="' + this._name + '"]').forEach(_target => {
         _target.innerHTML = this.html;
         this.renderSubviews(_target);
       });
-      Object.assign(_options$1.eventRender.detail, {
+      Object.assign(this.constructor.options.eventRender.detail, {
         view: this
       });
-      document.dispatchEvent(_options$1.eventRender);
+      document.dispatchEvent(this.constructor.options.eventRender);
       return Promise.resolve();
     }
 
     renderSubviews(parent) {
-      if (_options$1.verbose) console.info('View.renderSubviews()', this.name, {
+      if (this.constructor.options.verbose) console.info(this.constructor.name + '.renderSubviews()', this.name, {
         view: this,
         parent: parent
       });
       parent.querySelectorAll('[ui-view]').forEach(_sub => {
         var viewName = _sub.getAttribute('ui-view');
 
-        var view = this.__proto__.constructor.cache(viewName);
+        var view = this.constructor.cache(viewName);
 
         if (view) {
           view.render();
@@ -672,21 +690,30 @@ var ActionUI = function (exports) {
 
 
     static create(options) {
-      return new View(options.name, options.html, options.model);
+      if (this.options.verbose) console.info(this.name + ':create()', {
+        options: options
+      });
+      return new this(options.name, options.html, options.model);
     } // Cache a view 
 
 
     static cache(view) {
+      if (this.options.verbose) console.info(this.name + ':cache()', {
+        view: view
+      });
+
       if ('string' == typeof view) {
         return _cache$1[view];
+      } else if (view instanceof View) {
+        if (view.name in _cache$1) {
+          throw 'View name already exists: "' + view.name + '"';
+        }
+
+        _cache$1[view.name] = view;
+        return this;
       }
 
-      if (view.name in _cache$1) {
-        throw 'View name already exists: "' + view.name + '"';
-      }
-
-      _cache$1[view.name] = view;
-      return View;
+      return _cache$1;
     } // Render all views
 
 
@@ -704,7 +731,7 @@ var ActionUI = function (exports) {
   var _cache$1 = {};
   var _options$1 = {
     verbose: false,
-    autoCache: false,
+    autoCache: true,
     // Automatically cache views when created
     eventRender: new CustomEvent('view.render', {
       bubbles: true,
@@ -734,8 +761,13 @@ var ActionUI = function (exports) {
       this.file = file;
     }
 
+    clear() {
+      this.html = null;
+      return super.clear();
+    }
+
     render() {
-      if (_options$2.verbose) console.info('ViewFile.render()', this.name, {
+      if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
         view: this
       });
 
@@ -745,6 +777,9 @@ var ActionUI = function (exports) {
     }
 
     fetch() {
+      if (this.constructor.options.verbose) console.info(this.constructor.name + '.fetch()', this.name, {
+        view: this
+      });
       return fetch(this.fullPath).then(response => {
         if (response.ok) {
           return response.text();
@@ -757,11 +792,11 @@ var ActionUI = function (exports) {
     }
 
     get fileName() {
-      return this.file + '.' + this.__proto__.constructor.options.extension;
+      return this.file + '.' + this.constructor.options.extension;
     }
 
     get fullPath() {
-      return this.__proto__.constructor.options.basePath + this.fileName;
+      return this.constructor.options.basePath + this.fileName;
     }
 
     get file() {
@@ -779,11 +814,15 @@ var ActionUI = function (exports) {
 
 
     static create(options) {
+      if (this.options.verbose) console.info(this.name + ':create()', {
+        options: options
+      });
+
       if (options.file) {
         options.file = options.name;
       }
 
-      return new ViewFile(options.name, options.file, options.model);
+      return new this(options.name, options.file, options.model);
     }
 
     static get options() {
@@ -810,7 +849,7 @@ var ActionUI = function (exports) {
 
   class ViewHandlebars extends ViewFile {
     render() {
-      if (_options$3.verbose) console.info('ViewHandlebars.render()', this.name, {
+      if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
         view: this
       });
       var _promise = null;

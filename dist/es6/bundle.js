@@ -54,13 +54,24 @@ var ActionUI = (function (exports) {
         return str.toLowerCase().replace(/[^a-zA-Z0-9]+(.)/g, (_match, chr) => chr.toUpperCase())
     }
 
+    function firstMatchingParentElement( element, selector )
+    {
+        if ( element == null || element.matches(selector) )
+        {
+            return element
+        }
+
+        return firstMatchingParentElement(element.parentElement, selector)
+    }
+
     var util = /*#__PURE__*/Object.freeze({
         __proto__: null,
         deepAssign: deepAssign,
         requestFromElement: requestFromElement,
         form: form,
         capitalize: capitalize,
-        camelCase: camelCase
+        camelCase: camelCase,
+        firstMatchingParentElement: firstMatchingParentElement
     });
 
     /**
@@ -308,26 +319,28 @@ var ActionUI = (function (exports) {
         static init()
         {
             // General elements
-            document.addEventListener('click', (e) =>
+            document.addEventListener('click', e =>
             {
-                if (e.target.matches('[ui-action]') && e.target.tagName != 'FORM')
+                let target = firstMatchingParentElement(e.target, '[ui-action]');
+                
+                if ( target && target.tagName != 'FORM')
                 {
-                    var actionName = e.target.getAttribute('ui-action');
+                    var actionName = target.getAttribute('ui-action');
 
                     // Don't run the action if it's already running
                     if (actionName in _cache)
                     {
                         if (_cache[actionName].running == false)
                         {
-                            _cache[actionName].run(e.target);
+                            _cache[actionName].run(target);
                         }
                     }
                     else if ( _options.autoCreate )
                     {
                         // Auto create and run action
-                        var action = Action.createFromElement(e.target);
+                        var action = Action.createFromElement(target);
                         Action.cache(action);
-                        action.run(e.target);
+                        action.run(target);
                     }
                     else
                     {
@@ -337,7 +350,7 @@ var ActionUI = (function (exports) {
             });
 
             // Form submission
-            document.addEventListener('submit', (e) =>
+            document.addEventListener('submit', e =>
             {
                 if (e.target.matches('form[ui-action]'))
                 {
@@ -634,16 +647,28 @@ var ActionUI = (function (exports) {
             
             model.watch((changes) => this.update(changes));
 
-            if ( _options$1.autoCache )
+            if ( this.constructor.options.autoCache )
             {
                 View.cache(this);
             }
         }
 
+        clear()
+        {
+            document
+                .querySelectorAll('[ui-view="'+this._name+'"]')
+                .forEach((_target) =>
+                {
+                    _target.innerHTML = '';
+                });
+            
+            return this
+        }
+
         // When the model updates
         update(changes)
         {
-            if ( _options$1.verbose ) console.info( 'View.update()', this.name, {view:this, changes:changes} );
+            if ( this.constructor.options.verbose ) console.info( this.constructor.name + '.update()', this.name, {view:this, changes:changes} );
 
             this.render();
         }
@@ -655,7 +680,7 @@ var ActionUI = (function (exports) {
          */
         render()
         {
-            if ( _options$1.verbose ) console.info( 'View.render()', this.name, {view:this} );
+            if ( this.constructor.options.verbose ) console.info( this.constructor.name + '.render()', this.name, {view:this} );
 
             document
                 .querySelectorAll('[ui-view="'+this._name+'"]')
@@ -665,24 +690,24 @@ var ActionUI = (function (exports) {
                     this.renderSubviews(_target);
                 });
 
-                Object.assign(_options$1.eventRender.detail, {
+                Object.assign(this.constructor.options.eventRender.detail, {
                     view: this
                 });
         
-                document.dispatchEvent(_options$1.eventRender);
+                document.dispatchEvent(this.constructor.options.eventRender);
             
             return Promise.resolve()
         }
 
         renderSubviews(parent)
         {
-            if ( _options$1.verbose ) console.info( 'View.renderSubviews()', this.name, {view:this, parent:parent} );
+            if ( this.constructor.options.verbose ) console.info( this.constructor.name + '.renderSubviews()', this.name, {view:this, parent:parent} );
 
             parent.querySelectorAll('[ui-view]')
             .forEach((_sub) =>
             {
                 let viewName = _sub.getAttribute('ui-view');
-                let view = this.__proto__.constructor.cache(viewName);
+                let view = this.constructor.cache(viewName);
                 if ( view )
                 {
                     view.render();
@@ -700,24 +725,31 @@ var ActionUI = (function (exports) {
         // View factory
         static create(options)
         {
-            return new View(options.name, options.html, options.model)
+            if ( this.options.verbose ) console.info( this.name + ':create()', {options:options} );
+            return new this(options.name, options.html, options.model)
         }
 
         // Cache a view 
         static cache(view)
         {
+            if ( this.options.verbose ) console.info( this.name + ':cache()', {view:view} );
+
             if ('string' == typeof view)
             {
                 return _cache$1[view]
             }
-
-            if (view.name in _cache$1)
+            else if ( view instanceof View )
             {
-                throw 'View name already exists: "' + view.name + '"'
+                if (view.name in _cache$1)
+                {
+                    throw 'View name already exists: "' + view.name + '"'
+                }
+
+                _cache$1[view.name] = view;
+                return this
             }
 
-            _cache$1[view.name] = view;
-            return View
+            return _cache$1
         }
 
         // Render all views
@@ -731,7 +763,7 @@ var ActionUI = (function (exports) {
     let _cache$1 = {};
     let _options$1 = {
         verbose: false,
-        autoCache: false, // Automatically cache views when created
+        autoCache: true, // Automatically cache views when created
         eventRender: new CustomEvent('view.render', { bubbles: true, detail: { type: 'render', view: null } })
     };
 
@@ -759,9 +791,15 @@ var ActionUI = (function (exports) {
             this.file = file;
         }
 
+        clear()
+        {
+            this.html = null;
+            return super.clear()
+        }
+
         render()
         {
-            if ( _options$2.verbose ) console.info( 'ViewFile.render()', this.name, {view:this} );
+            if ( this.constructor.options.verbose ) console.info( this.constructor.name + '.render()', this.name, {view:this} );
 
             var _promise = this._html == null ? this.fetch() : Promise.resolve();
             return _promise.then(() => super.render())
@@ -769,14 +807,16 @@ var ActionUI = (function (exports) {
 
         fetch()
         {
+            if ( this.constructor.options.verbose ) console.info( this.constructor.name + '.fetch()', this.name, {view:this} );
+
             return fetch(this.fullPath)
                 .then(response => {if (response.ok) { return response.text() } else { throw new Error(response.statusText) }})
                 .then(html => this._html = html)
                 .catch(e => { throw new Error('File not found: ' + this.fileName) })
         }
 
-        get fileName() { return this.file + '.' + this.__proto__.constructor.options.extension }
-        get fullPath() { return this.__proto__.constructor.options.basePath + this.fileName }
+        get fileName() { return this.file + '.' + this.constructor.options.extension }
+        get fullPath() { return this.constructor.options.basePath + this.fileName }
 
         get file() { return this._file }
         set file(file)
@@ -793,12 +833,14 @@ var ActionUI = (function (exports) {
         // View factory
         static create(options)
         {
+            if ( this.options.verbose ) console.info( this.name + ':create()', {options:options} );
+
             if ( options.file )
             {
                 options.file = options.name;
             }
 
-            return new ViewFile(options.name, options.file, options.model)
+            return new this(options.name, options.file, options.model)
         }
 
         static get options() { return _options$2 }
@@ -822,7 +864,7 @@ var ActionUI = (function (exports) {
     {
         render()
         {
-            if ( _options$3.verbose ) console.info( 'ViewHandlebars.render()', this.name, {view:this} );
+            if ( this.constructor.options.verbose ) console.info( this.constructor.name + '.render()', this.name, {view:this} );
 
             var _promise = null;
 
@@ -900,7 +942,7 @@ var ActionUI = (function (exports) {
                     _cache$2[controller] = new Controller(this.view);
                 }
             }
-
+            
             pathMethod = pathMethod || _options$4.defaultMethod;
             let result = null;
             let view = pathController + _options$4.pathSeparator + pathMethod;

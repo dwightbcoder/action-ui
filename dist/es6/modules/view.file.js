@@ -25,9 +25,15 @@ class ViewFile extends View
         this.file = file
     }
 
+    clear()
+    {
+        this.html = null
+        return super.clear()
+    }
+
     render()
     {
-        if ( _options.verbose ) console.info( 'ViewFile.render()', this.name, {view:this} )
+        if ( this.constructor.options.verbose ) console.info( this.constructor.name + '.render()', this.name, {view:this} )
 
         var _promise = this._html == null ? this.fetch() : Promise.resolve()
         return _promise.then(() => super.render())
@@ -35,14 +41,16 @@ class ViewFile extends View
 
     fetch()
     {
+        if ( this.constructor.options.verbose ) console.info( this.constructor.name + '.fetch()', this.name, {view:this} )
+
         return fetch(this.fullPath)
             .then(response => {if (response.ok) { return response.text() } else { throw new Error(response.statusText) }})
             .then(html => this._html = html)
             .catch(e => { throw new Error('File not found: ' + this.fileName) })
     }
 
-    get fileName() { return this.file + '.' + this.__proto__.constructor.options.extension }
-    get fullPath() { return this.__proto__.constructor.options.basePath + this.fileName }
+    get fileName() { return this.file + '.' + this.constructor.options.extension }
+    get fullPath() { return this.constructor.options.basePath + this.fileName }
 
     get file() { return this._file }
     set file(file)
@@ -59,12 +67,14 @@ class ViewFile extends View
     // View factory
     static create(options)
     {
+        if ( this.options.verbose ) console.info( this.name + ':create()', {options:options} )
+
         if ( options.file )
         {
             options.file = options.name
         }
 
-        return new ViewFile(options.name, options.file, options.model)
+        return new this(options.name, options.file, options.model)
     }
 
     static get options() { return _options }

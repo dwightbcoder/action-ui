@@ -1,0 +1,22 @@
+<div class="content">
+    <p class="title is-5">
+        To Do
+    </p>
+    <ul>
+        {{#each this}}
+        <li>
+            <label class="checkbox">
+                <input ui-action="update todo" data-id="{{id}}" type="checkbox" name="checked" {{#if checked}}checked="checked"{{/if}} value="1">
+                {{text}}
+            </label>
+            <button ui-action="delete todo" class="button is-outlined is-small is-pulled-right is-danger" data-id="{{id}}" type="button">
+                <span class="icon">
+                    <i class="fas fa-trash"></i>
+                </span>
+            </button>
+        </li>
+        {{else}}
+        <li><em>Nothing to do!</em></li>
+        {{/each}}
+    </ul>
+</div>

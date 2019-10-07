@@ -10,7 +10,7 @@ class ViewHandlebars extends ViewFile
 {
     render()
     {
-        if ( _options.verbose ) console.info( 'ViewHandlebars.render()', this.name, {view:this} )
+        if ( this.constructor.options.verbose ) console.info( this.constructor.name + '.render()', this.name, {view:this} )
 
         var _promise = null
 

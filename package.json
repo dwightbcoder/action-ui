@@ -1,7 +1,7 @@
 {
   "name": "@dwightbcoder/action-ui",
-  "version": "1.0.6",
-  "description": "Action UI is a Javascript framework for building event-base user interfaces",
+  "version": "1.0.7",
+  "description": "Action UI is a Javascript framework to simplify connecting actions to user interface elements",
   "main": "dist/action-ui.min.js",
   "directories": {
     "example": "example"
@@ -26,17 +26,25 @@
     "javascript",
     "ui",
     "framework",
+    "event",
     "mvc",
+    "promise",
+    "fetch",
     "action-ui",
     "handlebars",
-    "jsonapi"
+    "jsonapi",
+    "spa",
+    "client-side"
   ],
-  "author": "Dwight Brown",
+  "author": "Dwight Brown <self@dwightbcoder.com> (https://github.com/dwightbcoder)",
   "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/dwightbcoder/action-ui/issues"
-  },
+  "bugs": "https://github.com/dwightbcoder/action-ui/issues",
   "homepage": "https://github.com/dwightbcoder/action-ui#readme",
+  "browserlist":[
+    "last 2 versions",
+    "not IE > 0",
+    "not dead"
+  ],
   "devDependencies": {
     "@babel/cli": "^7.6.2",
     "@babel/core": "^7.6.2",
