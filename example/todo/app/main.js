@@ -1,4 +1,5 @@
-import { Action, Model, ViewHandlebars as View, Controller, Router } from '/action-ui/index.js'
+//import { Action, Model, ViewHandlebars as View, Controller, Router } from '/action-ui/index.js'
+import { Action, Model, ViewHandlebars as View, Controller, Router } from 'https://cdn.jsdelivr.net/npm/@dwightbcoder/action-ui/dist/es6/index.js'
 import { Store } from './store.js'
 import * as Controllers from './controller/_module.js'
 
