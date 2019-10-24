@@ -12,26 +12,25 @@ class ViewHandlebars extends ViewFile
     {
         if ( this.constructor.options.verbose ) console.info( this.constructor.name + '.render()', this.name, {view:this} )
 
-        var _promise = null
+        var _promise = _promise = Promise.resolve()
 
-        if (this._html == null)
+        if (this.html == null && Handlebars.templates && Handlebars.templates[this.file])
         {
-            if (Handlebars.templates && Handlebars.templates[this.file])
-            {
-                this._html = Handlebars.templates[this.file]
-                _promise = Promise.resolve()
-            }
-            else
-            {
-                _promise = this.fetch().then(() => this._html = Handlebars.compile(this._html))
-            }
-        }
-        else
-        {
-            _promise = Promise.resolve()
+            this.html = Handlebars.templates[this.file]
         }
 
         return _promise.then(() => super.render())
+    }
+
+    fetch()
+    {
+        return super.fetch()
+            .then(html => {
+                if (!('templates' in Handlebars)) Handlebars.templates = []
+                Handlebars.templates[this.file] = Handlebars.compile(html)
+                this.html = Handlebars.templates[this.file]
+                return html
+            })
     }
 
     // #region Static methods
