@@ -1,6 +1,6 @@
 {
   "name": "@dwightbcoder/action-ui",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Action UI is a Javascript framework to simplify connecting actions to user interface elements",
   "main": "dist/action-ui.min.js",
   "directories": {
@@ -12,9 +12,7 @@
     "babel:dev": "NODE_ENV=dev babel src/bundle.js -d dist && mv dist/bundle.js dist/action-ui.js",
     "babel:prod": "NODE_ENV=production babel src/bundle.js -d dist && mv dist/bundle.js dist/action-ui.min.js",
     "build": "npm run rollup && npm run babel:dev && npm run babel:prod && rm -r dist/es6 && cp -a src dist/es6",
-    "build:example": "npm run build && npm run build:example1 && npm run build:example2",
-    "build:example1": "cp dist/action-ui.min.js example/spa/action-ui.min.js",
-    "build:example2": "cp dist/action-ui.min.js example/spa-handlebars/action-ui.min.js",
+    "dev": "webpack --watch",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -40,16 +38,10 @@
   "license": "ISC",
   "bugs": "https://github.com/dwightbcoder/action-ui/issues",
   "homepage": "https://github.com/dwightbcoder/action-ui#readme",
-  "browserlist":[
-    "last 2 versions",
-    "not IE > 0",
-    "not dead"
-  ],
   "devDependencies": {
-    "@babel/cli": "^7.6.2",
-    "@babel/core": "^7.6.2",
-    "@babel/preset-env": "^7.6.2",
+    "@babel/cli": "^7.7.0",
+    "@babel/core": "^7.7.2",
+    "@babel/preset-env": "^7.7.1",
     "babel-preset-minify": "^0.5.1"
-  },
-  "dependencies": {}
+  }
 }

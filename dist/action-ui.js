@@ -1,5 +1,27 @@
 "use strict";
 
+function _get(target, property, receiver) { if (typeof Reflect !== "undefined" && Reflect.get) { _get = Reflect.get; } else { _get = function _get(target, property, receiver) { var base = _superPropBase(target, property); if (!base) return; var desc = Object.getOwnPropertyDescriptor(base, property); if (desc.get) { return desc.get.call(receiver); } return desc.value; }; } return _get(target, property, receiver || target); }
+
+function _superPropBase(object, property) { while (!Object.prototype.hasOwnProperty.call(object, property)) { object = _getPrototypeOf(object); if (object === null) break; } return object; }
+
+function _typeof(obj) { if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
+
+function _possibleConstructorReturn(self, call) { if (call && (_typeof(call) === "object" || typeof call === "function")) { return call; } return _assertThisInitialized(self); }
+
+function _assertThisInitialized(self) { if (self === void 0) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return self; }
+
+function _getPrototypeOf(o) { _getPrototypeOf = Object.setPrototypeOf ? Object.getPrototypeOf : function _getPrototypeOf(o) { return o.__proto__ || Object.getPrototypeOf(o); }; return _getPrototypeOf(o); }
+
+function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function"); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, writable: true, configurable: true } }); if (superClass) _setPrototypeOf(subClass, superClass); }
+
+function _setPrototypeOf(o, p) { _setPrototypeOf = Object.setPrototypeOf || function _setPrototypeOf(o, p) { o.__proto__ = p; return o; }; return _setPrototypeOf(o, p); }
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+function _defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } }
+
+function _createClass(Constructor, protoProps, staticProps) { if (protoProps) _defineProperties(Constructor.prototype, protoProps); if (staticProps) _defineProperties(Constructor, staticProps); return Constructor; }
+
 var ActionUI = function (exports) {
   'use strict';
   /**
@@ -37,7 +59,9 @@ var ActionUI = function (exports) {
   }
 
   function camelCase(str) {
-    return str.toLowerCase().replace(/[^a-zA-Z0-9]+(.)/g, (_match, chr) => chr.toUpperCase());
+    return str.toLowerCase().replace(/[^a-zA-Z0-9]+(.)/g, function (_match, chr) {
+      return chr.toUpperCase();
+    });
   }
 
   function firstMatchingParentElement(element, selector) {
@@ -64,126 +88,172 @@ var ActionUI = function (exports) {
    * @description Observable data object
    */
 
-  var _changes = new WeakMap();
-
-  var _watchers = new WeakMap();
-
-  var _timer = new WeakMap();
-
-  var _trigger_delay = 10;
-
-  class Model {
-    constructor() {
+  var Model =
+  /*#__PURE__*/
+  function () {
+    function Model() {
       var data = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
 
-      _changes.set(this, {});
+      _classCallCheck(this, Model);
 
-      _watchers.set(this, []);
+      this._options = {
+        triggerDelay: 10
+      };
+      this._changes = {};
+      this._watchers = [];
+      this._timer = null;
 
-      _timer.set(this, null);
+      this._privatize();
 
-      var _proxy = new Proxy(this, {
-        get: (target, prop) => prop == 'watch' || prop == 'clearChanges' ? function () {
-          return target[prop].apply(target, arguments);
-        } : Reflect.get(target, prop),
-        set: (target, prop, value) => {
-          var originalValue = target[prop];
+      deepAssign(this, data); // Pre-init required by IE11
+
+      var proxySet = function proxySet(target, prop, value) {
+        var originalValue = target[prop];
+
+        if (window.Reflect && window.Reflect.set) {
           Reflect.set(target, prop, value);
-
-          target._change(target, prop, value, originalValue);
-
-          return true;
-        },
-        deleteProperty: (target, prop) => {
-          if (prop in target) {
-            var originalValue = target[prop];
-            delete target[prop];
-
-            target._change(target, prop, undefined, originalValue);
-          }
-
-          return true;
         }
-      });
 
-      deepAssign(_proxy, data);
-      return _proxy;
-    }
+        target._change(prop, value, originalValue);
 
-    clear() {
-      for (var i in this) {
-        delete this[i];
-      }
-
-      return this;
-    } // Sync data object to model
-
-
-    sync(data) {
-      data = Object.assign({}, data);
-      deepAssign(this, data);
-      return this;
-    } // Add watcher callback
-
-
-    watch(callback) {
-      _watchers.get(this).push(callback);
-
-      return this;
-    }
-
-    clearChanges() {
-      //console.log('clearChanges',this)
-      _changes.set(this, {});
-
-      return this;
-    } // Trigger all watcher callbacks
-
-
-    _trigger() {
-      window.clearTimeout(_timer.get(this));
-
-      _timer.set(this, null);
-
-      var changes = _changes.get(this);
-
-      if (Object.keys(changes).length > 0) {
-        //console.log('changes',changes,this)
-        var callbacks = _watchers.get(this);
-
-        for (var i in callbacks) {
-          callbacks[i].call(this, changes);
-        } // Clear change list
-
-
-        _changes.set(this, {});
-      }
-    } // Log property change
-
-
-    _change(target, prop, value, originalValue) {
-      _changes.get(target)[prop] = {
-        value: value,
-        originalValue: originalValue
+        return true;
       };
 
-      if (!_timer.get(target)) {
-        _timer.set(target, window.setTimeout(() => target._trigger(), _trigger_delay));
+      var proxyDelete = function proxyDelete(target, prop) {
+        if (prop in target) {
+          var originalValue = target[prop];
+          delete target[prop];
+
+          target._change(prop, undefined, originalValue);
+        }
+
+        return true;
+      };
+
+      var proxy = null;
+
+      try {
+        proxy = new Proxy(this, {
+          set: proxySet,
+          deleteProperty: proxyDelete
+        });
+      } catch (e) {
+        // IE11 Proxy polyfill does not support delete
+        proxy = new Proxy(this, {
+          set: proxySet
+        });
       }
+
+      deepAssign(this, data);
+      return proxy;
     }
 
-  }
+    _createClass(Model, [{
+      key: "clear",
+      value: function clear() {
+        for (var i in this) {
+          try {
+            delete this[i];
+          } catch (e) {
+            // Fallback for IE11
+            var originalValue = this[i];
+            this[i] = undefined;
+
+            this._change(i, undefined, originalValue);
+          }
+        }
+
+        return this;
+      } // Sync data object to model
+
+    }, {
+      key: "sync",
+      value: function sync(data) {
+        data = Object.assign({}, data);
+        deepAssign(this, data);
+        return this;
+      } // Add watcher callback
+
+    }, {
+      key: "watch",
+      value: function watch(callback) {
+        this._watchers.push(callback);
+
+        return this;
+      }
+    }, {
+      key: "clearChanges",
+      value: function clearChanges() {
+        this._changes = {};
+        return this;
+      }
+    }, {
+      key: "_privatize",
+      value: function _privatize() {
+        for (var i in this) {
+          if (i[0] == "_") {
+            Object.defineProperty(this, i, {
+              enumerable: false
+            });
+          }
+        }
+      } // Trigger all watcher callbacks
+
+    }, {
+      key: "_trigger",
+      value: function _trigger() {
+        window.clearTimeout(this._timer);
+        this._timer = null;
+
+        if (Object.keys(this._changes).length > 0) {
+          var callbacks = this._watchers;
+
+          for (var i in callbacks) {
+            callbacks[i].call(this, this._changes);
+          } // Clear change list
+
+
+          this._changes = {};
+        }
+      } // Log property change
+
+    }, {
+      key: "_change",
+      value: function _change(prop, value, originalValue) {
+        var _this = this;
+
+        this._changes[prop] = {
+          value: value,
+          originalValue: originalValue
+        };
+
+        if (!this._timer) {
+          this._timer = window.setTimeout(function () {
+            return _this._trigger();
+          }, this._options.triggerDelay);
+        }
+      }
+    }]);
+
+    return Model;
+  }();
   /**
    * Action UI
    * Allows named handlers to be handled as state-aware deferred promises with before/after events
    */
 
 
-  class Action {
-    constructor(name, handler, model) {
+  var Action =
+  /*#__PURE__*/
+  function () {
+    function Action(name, handler, model) {
+      _classCallCheck(this, Action);
+
       this.name = name;
 
-      this.handler = handler || ((resolve, reject, data) => resolve(data));
+      this.handler = handler || function (resolve, reject, data) {
+        return resolve(data);
+      };
 
       this.model = model ? model : new Model();
       this.running = false;
@@ -194,235 +264,264 @@ var ActionUI = function (exports) {
     } // trigger before event and run the handler as a promise 
 
 
-    run(target) {
-      var data = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
-      if (_options.verbose) console.info('Action.run()', this.name, {
-        action: this,
-        target: target,
-        data: data
-      });
-      this.running = true;
-      target = target || document.body; //target.setAttribute('disabled', 'disabled')
+    _createClass(Action, [{
+      key: "run",
+      value: function run(target) {
+        var _this2 = this;
 
-      data = Object.assign(data, Action.data(target));
-      this.before(target, data);
-      var promise = null;
+        var data = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+        if (_options.verbose) console.info('Action.run()', this.name, {
+          action: this,
+          target: target,
+          data: data
+        });
+        this.running = true;
+        target = target || document.body; //target.setAttribute('disabled', 'disabled')
 
-      if (this.handler instanceof Function) {
-        promise = new Promise((resolve, reject) => this.handler(resolve, reject, data));
-      } else if (this.handler instanceof Request) {
-        // If there is data to send, recreate the request with the data
-        if (Object.keys(data).length > 0) {
-          var _options2 = {};
+        data = Object.assign(data, Action.data(target));
+        this.before(target, data);
+        var promise = null;
 
-          for (var i in this.handler) {
-            _options2[i] = this.handler[i];
-          }
+        if (this.handler instanceof Function) {
+          promise = new Promise(function (resolve, reject) {
+            return _this2.handler(resolve, reject, data);
+          });
+        } else if (this.handler instanceof Request) {
+          // If there is data to send, recreate the request with the data
+          if (Object.keys(data).length > 0) {
+            var _options2 = {};
 
-          if (_options2.method == 'POST') {
-            _options2.body = JSON.stringify(data);
-          } else if (_options2.method == 'GET') {
-            // Append query string to URL with ?/& first as needed
-            _options2.url += (_options2.url.indexOf('?') < 0 ? '?' : '&') + Object.keys(data).map(key => key + '=' + data[key]).join('&');
-          }
-
-          this.handler = new Request(_options2.url, _options2);
-        }
-
-        promise = fetch(this.handler).then(response => response.json());
-      }
-
-      return promise.then(result => this.after(target, true, result, data), result => this.after(target, false, result, data));
-    }
-
-    syncModel(data) {
-      if (_options.verbose) console.info('Action.syncModel()', this.name, {
-        action: this,
-        data: data
-      });
-
-      if (!(data instanceof Object)) {
-        data = {
-          result: data
-        };
-      }
-
-      if (this.model.sync && this.model.sync instanceof Function) {
-        this.model.sync(data);
-      } else if (this.model instanceof Object) {
-        deepAssign(this.model, data);
-      }
-
-      return data;
-    }
-
-    before(target, data) {
-      if (_options.verbose) console.info('Action.before()', this.name, {
-        action: this,
-        target: target,
-        data: data
-      });
-      Action.setCssClass(target, _options.cssClass.loading);
-      Action.reflectCssClass(this.name, _options.cssClass.loading);
-      Object.assign(_options.eventBefore.detail, {
-        name: this.name,
-        data: data,
-        model: this.model
-      });
-      target.dispatchEvent(_options.eventBefore);
-    }
-
-    after(target, success, result, data) {
-      if (_options.verbose) console.info('Action.after()', this.name, {
-        action: this,
-        target: target,
-        data: data,
-        success: success,
-        result: result
-      });
-      this.running = false; //target.removeAttribute('disabled')
-
-      var cssClass = success ? _options.cssClass.success : _options.cssClass.fail;
-      Action.setCssClass(target, cssClass);
-      Action.reflectCssClass(this.name, cssClass);
-
-      if (result != undefined) {
-        this.syncModel(result);
-      }
-
-      Object.assign(_options.eventAfter.detail, {
-        name: this.name,
-        success: success,
-        data: data,
-        model: this.model
-      });
-      target.dispatchEvent(_options.eventAfter);
-      return result;
-    } // #region Static methods
-    // Initialize the action cache and top-level event listener (only once)
-
-
-    static init() {
-      // General elements
-      document.addEventListener('click', e => {
-        var target = firstMatchingParentElement(e.target, '[ui-action]');
-
-        if (target && target.tagName != 'FORM') {
-          var actionName = target.getAttribute('ui-action'); // Don't run the action if it's already running
-
-          if (actionName in _cache) {
-            if (_cache[actionName].running == false) {
-              _cache[actionName].run(target);
+            for (var i in this.handler) {
+              _options2[i] = this.handler[i];
             }
-          } else if (_options.autoCreate) {
-            // Auto create and run action
-            var action = Action.createFromElement(target);
-            Action.cache(action);
-            action.run(target);
-          } else {
-            throw new Error('Action not found: ' + actionName);
-          }
-        }
-      }); // Form submission
 
-      document.addEventListener('submit', e => {
-        if (e.target.matches('form[ui-action]')) {
-          e.preventDefault();
-          var actionName = e.target.getAttribute('ui-action'); // Don't run the action if it's already running
-
-          if (actionName in _cache) {
-            if (_cache[actionName].running == false) {
-              _cache[actionName].run(e.target);
+            if (_options2.method == 'POST') {
+              _options2.body = JSON.stringify(data);
+            } else if (_options2.method == 'GET') {
+              // Append query string to URL with ?/& first as needed
+              _options2.url += (_options2.url.indexOf('?') < 0 ? '?' : '&') + Object.keys(data).map(function (key) {
+                return key + '=' + data[key];
+              }).join('&');
             }
-          } else if (_options.autoCreate) {
-            // Auto create and run action
-            var action = Action.createFromElement(e.target);
-            Action.cache(action);
-            action.run(e.target);
+
+            this.handler = new Request(_options2.url, _options2);
+          }
+
+          promise = fetch(this.handler).then(function (response) {
+            return response.json();
+          });
+        }
+
+        return promise.then(function (result) {
+          return _this2.after(target, true, result, data);
+        }, function (result) {
+          return _this2.after(target, false, result, data);
+        });
+      }
+    }, {
+      key: "syncModel",
+      value: function syncModel(data) {
+        if (_options.verbose) console.info('Action.syncModel()', this.name, {
+          action: this,
+          data: data
+        });
+
+        if (!(data instanceof Object)) {
+          data = {
+            result: data
+          };
+        }
+
+        if (this.model.sync && this.model.sync instanceof Function) {
+          this.model.sync(data);
+        } else if (this.model instanceof Object) {
+          deepAssign(this.model, data);
+        }
+
+        return data;
+      }
+    }, {
+      key: "before",
+      value: function before(target, data) {
+        if (_options.verbose) console.info('Action.before()', this.name, {
+          action: this,
+          target: target,
+          data: data
+        });
+        Action.setCssClass(target, _options.cssClass.loading);
+        Action.reflectCssClass(this.name, _options.cssClass.loading);
+        Object.assign(_options.eventBefore.detail, {
+          name: this.name,
+          data: data,
+          model: this.model
+        });
+        target.dispatchEvent(_options.eventBefore);
+      }
+    }, {
+      key: "after",
+      value: function after(target, success, result, data) {
+        if (_options.verbose) console.info('Action.after()', this.name, {
+          action: this,
+          target: target,
+          data: data,
+          success: success,
+          result: result
+        });
+        this.running = false; //target.removeAttribute('disabled')
+
+        var cssClass = success ? _options.cssClass.success : _options.cssClass.fail;
+        Action.setCssClass(target, cssClass);
+        Action.reflectCssClass(this.name, cssClass);
+
+        if (result != undefined) {
+          this.syncModel(result);
+        }
+
+        Object.assign(_options.eventAfter.detail, {
+          name: this.name,
+          success: success,
+          data: data,
+          model: this.model
+        });
+        target.dispatchEvent(_options.eventAfter);
+        return result;
+      } // #region Static methods
+      // Initialize the action cache and top-level event listener (only once)
+
+    }], [{
+      key: "init",
+      value: function init() {
+        // General elements
+        document.addEventListener('click', function (e) {
+          var target = firstMatchingParentElement(e.target, '[ui-action]');
+
+          if (target && target.tagName != 'FORM') {
+            var actionName = target.getAttribute('ui-action'); // Don't run the action if it's already running
+
+            if (actionName in _cache) {
+              if (_cache[actionName].running == false) {
+                _cache[actionName].run(target);
+              }
+            } else if (_options.autoCreate) {
+              // Auto create and run action
+              var action = Action.createFromElement(target);
+              Action.cache(action);
+              action.run(target);
+            } else {
+              throw new Error('Action not found: ' + actionName);
+            }
+          }
+        }); // Form submission
+
+        document.addEventListener('submit', function (e) {
+          if (e.target.matches('form[ui-action]')) {
+            e.preventDefault();
+            var actionName = e.target.getAttribute('ui-action'); // Don't run the action if it's already running
+
+            if (actionName in _cache) {
+              if (_cache[actionName].running == false) {
+                _cache[actionName].run(e.target);
+              }
+            } else if (_options.autoCreate) {
+              // Auto create and run action
+              var action = Action.createFromElement(e.target);
+              Action.cache(action);
+              action.run(e.target);
+            } else {
+              throw new Error('Action not found: ' + actionName);
+            }
+          }
+        });
+      }
+    }, {
+      key: "create",
+      value: function create(options) {
+        if ('name' in options === false) throw 'No action name specfied';
+
+        if ('handler' in options === false) {
+          if ('url' in options === true && options.url) {
+            options.handler = new Request(options.url, options.request || {});
           } else {
-            throw new Error('Action not found: ' + actionName);
+            options.handler = null;
           }
         }
-      });
-    }
 
-    static create(options) {
-      if ('name' in options === false) throw 'No action name specfied';
+        return new Action(options.name, options.handler, options.model);
+      }
+    }, {
+      key: "createFromElement",
+      value: function createFromElement(element) {
+        var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+        return Action.create(Object.assign({
+          name: element.getAttribute('ui-action') || null,
+          url: element.action || options.href || null,
+          request: {
+            method: element.method || null
+          }
+        }, options));
+      } // Cache an action 
 
-      if ('handler' in options === false) {
-        if ('url' in options === true && options.url) {
-          options.handler = new Request(options.url, options.request || {});
-        } else {
-          options.handler = null;
+    }, {
+      key: "cache",
+      value: function cache(action) {
+        if ('string' == typeof action) {
+          return _cache[action];
         }
-      }
 
-      return new Action(options.name, options.handler, options.model);
-    }
-
-    static createFromElement(element) {
-      var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
-      return Action.create(Object.assign({
-        name: element.getAttribute('ui-action') || null,
-        url: element.action || options.href || null,
-        request: {
-          method: element.method || null
+        if (action.name in _cache) {
+          return Action; //throw 'Action name already exists: "' + action.name + '"'
         }
-      }, options));
-    } // Cache an action 
 
-
-    static cache(action) {
-      if ('string' == typeof action) {
-        return _cache[action];
+        _cache[action.name] = action;
+        return Action;
       }
+    }, {
+      key: "data",
+      value: function data(target) {
+        var data = target.dataset || {};
+        var form$1 = form(target);
 
-      if (action.name in _cache) {
-        return Action; //throw 'Action name already exists: "' + action.name + '"'
+        if (form$1) {
+          data = Object.assign(Object.fromEntries(new FormData(form$1)), data);
+        }
+
+        return data;
       }
-
-      _cache[action.name] = action;
-      return Action;
-    }
-
-    static data(target) {
-      var data = target.dataset || {};
-      var form$1 = form(target);
-
-      if (form$1) {
-        data = Object.assign(Object.fromEntries(new FormData(form$1)), data);
+    }, {
+      key: "get",
+      value: function get(name) {
+        return _cache[name];
       }
+    }, {
+      key: "setCssClass",
+      value: function setCssClass(target, cssClass) {
+        for (var i in _options.cssClass) {
+          target.classList.remove(_options.cssClass[i]);
+        }
 
-      return data;
-    }
+        target.classList.add(cssClass);
+      } // Propagate class to all reflectors (ui-state and form submit buttons)
 
-    static get(name) {
-      return _cache[name];
-    }
-
-    static setCssClass(target, cssClass) {
-      for (var i in _options.cssClass) {
-        target.classList.remove(_options.cssClass[i]);
+    }, {
+      key: "reflectCssClass",
+      value: function reflectCssClass(name, cssClass) {
+        document.querySelectorAll('form[ui-action="' + name + '"] [type="submit"], form[ui-action="' + name + '"] button:not([type]), [ui-state="' + name + '"]').forEach(function (el) {
+          return Action.setCssClass(el, cssClass);
+        });
       }
+    }, {
+      key: "options",
+      get: function get() {
+        return _options;
+      },
+      set: function set(value) {
+        deepAssign(_options, value);
+      } // #endregion
 
-      target.classList.add(cssClass);
-    } // Propagate class to all reflectors (ui-state and form submit buttons)
+    }]);
 
-
-    static reflectCssClass(name, cssClass) {
-      document.querySelectorAll('form[ui-action="' + name + '"] [type="submit"], form[ui-action="' + name + '"] button:not([type]), [ui-state="' + name + '"]').forEach(el => Action.setCssClass(el, cssClass));
-    }
-
-    static get options() {
-      return _options;
-    }
-
-    static set options(value) {
-      deepAssign(_options, value);
-    } // #endregion
-
-
-  }
+    return Action;
+  }();
 
   var _cache = {};
   var _options = {
@@ -460,28 +559,37 @@ var ActionUI = function (exports) {
    * Provider route mapping for SPAs
    */
 
-  class Controller {
-    constructor(view) {
+  var Controller =
+  /*#__PURE__*/
+  function () {
+    function Controller(view) {
+      _classCallCheck(this, Controller);
+
       this.view = view;
     }
 
-    __autoload() {
-      return this.view.render();
-    }
+    _createClass(Controller, [{
+      key: "__autoload",
+      value: function __autoload() {
+        return this.view.render();
+      }
+    }, {
+      key: "__error",
+      value: function __error(e) {
+        return this.view.render();
+      }
+    }, {
+      key: "view",
+      get: function get() {
+        return this._view;
+      },
+      set: function set(view) {
+        this._view = view;
+      }
+    }]);
 
-    __error(e) {
-      return this.view.render();
-    }
-
-    get view() {
-      return this._view;
-    }
-
-    set view(view) {
-      this._view = view;
-    }
-
-  }
+    return Controller;
+  }();
   /**
    * JsonApi
    * @description Json API data store
@@ -489,8 +597,16 @@ var ActionUI = function (exports) {
    */
 
 
-  class JsonApi extends Model {
-    constructor(baseUrl, model) {
+  var JsonApi =
+  /*#__PURE__*/
+  function (_Model) {
+    _inherits(JsonApi, _Model);
+
+    function JsonApi(baseUrl, model) {
+      var _this3;
+
+      _classCallCheck(this, JsonApi);
+
       // Accept an array of store keys
       if (model instanceof Array) {
         // Turn them into seperate stores
@@ -503,98 +619,131 @@ var ActionUI = function (exports) {
       }
 
       model._paging = {};
-      super(model);
-      this.baseUrl = baseUrl;
+      _this3 = _possibleConstructorReturn(this, _getPrototypeOf(JsonApi).call(this, model));
+      _this3.baseUrl = baseUrl;
+      return _this3;
     }
 
-    sync(json) {
-      if (!json.hasOwnProperty('data')) {
-        throw new Error('JsonApi: No data to sync');
+    _createClass(JsonApi, [{
+      key: "sync",
+      value: function sync(json) {
+        if (!json.hasOwnProperty('data')) {
+          throw new Error('JsonApi: No data to sync');
+        }
+
+        if (json.data instanceof Array) {
+          var _collection = {};
+
+          for (var i in json.data) {
+            _collection[json.data[i].id] = this.sync({
+              data: json.data[i]
+            });
+          }
+
+          return _collection; //this[json.data[0].type]
+        }
+
+        var type = json.data.type;
+        var id = json.data.id;
+
+        if (!this[type]) {
+          this[type] = new Model();
+        }
+
+        if (!this[type][id]) {
+          this[type][id] = new Model();
+        }
+
+        deepAssign(this[type][id], json.data);
+        return this[type][id];
       }
+    }, {
+      key: "fetch",
+      value: function (_fetch) {
+        function fetch(_x, _x2) {
+          return _fetch.apply(this, arguments);
+        }
 
-      if (json.data instanceof Array) {
-        var _collection = {};
+        fetch.toString = function () {
+          return _fetch.toString();
+        };
 
-        for (var i in json.data) {
-          _collection[json.data[i].id] = this.sync({
-            data: json.data[i]
+        return fetch;
+      }(function (type, id) {
+        var _this4 = this;
+
+        if (this[type]) {
+          if (id != undefined && this[type][id]) {
+            return Promise.resolve(this[type][id]);
+          } else if (id == undefined) {
+            return Promise.resolve(this[type]);
+          }
+        }
+
+        return fetch(this.baseUrl + '/' + type + (id ? '/' + id : '')).then(function (response) {
+          return response.json();
+        }).then(function (json) {
+          return _this4.sync(json);
+        });
+      })
+    }, {
+      key: "page",
+      value: function page(type) {
+        var _this5 = this;
+
+        var _page = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 1;
+
+        var size = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
+        size = parseInt(size) || 0;
+        _page = parseInt(_page) || 1;
+
+        if (type in this._paging && size in this._paging[type] && _page in this._paging[type][size]) {
+          return Promise.resolve().then(function () {
+            return _this5._paging[type][size][_page];
+          });
+        } else {
+          if (!(type in this._paging)) this._paging[type] = {};
+          if (!(size in this._paging[type])) this._paging[type][size] = {};
+          if (!(_page in this._paging[type][size])) this._paging[type][size][_page] = new Model({
+            type: type,
+            number: _page,
+            size: size,
+            count: 0,
+            links: {},
+            model: new Model()
           });
         }
 
-        return _collection; //this[json.data[0].type]
-      }
+        var qs = '?page[number]=' + _page;
 
-      var type = json.data.type;
-      var id = json.data.id;
-
-      if (!this[type]) {
-        this[type] = new Model();
-      }
-
-      if (!this[type][id]) {
-        this[type][id] = new Model();
-      }
-
-      deepAssign(this[type][id], json.data);
-      return this[type][id];
-    }
-
-    fetch(type, id) {
-      if (this[type]) {
-        if (id != undefined && this[type][id]) {
-          return Promise.resolve(this[type][id]);
-        } else if (id == undefined) {
-          return Promise.resolve(this[type]);
+        if (size > 0) {
+          qs += '&page[size]=' + size;
         }
-      }
 
-      return fetch(this.baseUrl + '/' + type + (id ? '/' + id : '')).then(response => response.json()).then(json => this.sync(json));
-    }
-
-    page(type) {
-      var page = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 1;
-      var size = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
-      size = parseInt(size) || 0;
-      page = parseInt(page) || 1;
-
-      if (type in this._paging && size in this._paging[type] && page in this._paging[type][size]) {
-        return Promise.resolve().then(() => this._paging[type][size][page]);
-      } else {
-        if (!(type in this._paging)) this._paging[type] = {};
-        if (!(size in this._paging[type])) this._paging[type][size] = {};
-        if (!(page in this._paging[type][size])) this._paging[type][size][page] = new Model({
-          type: type,
-          number: page,
-          size: size,
-          count: 0,
-          links: {},
-          model: new Model()
+        return fetch(this.baseUrl + '/' + type + qs).then(function (response) {
+          return response.json();
+        }).then(function (json) {
+          return _this5._paging[type][size][_page].sync({
+            links: json.links || {},
+            count: Object.keys(json.data).length,
+            model: _this5.sync(json)
+          });
         });
       }
-
-      var qs = '?page[number]=' + page;
-
-      if (size > 0) {
-        qs += '&page[size]=' + size;
+    }, {
+      key: "post",
+      value: function post(type, data) {
+        /*
+        data = {
+            id: '1',
+            attributes: {}
+        }
+        */
       }
+    }]);
 
-      return fetch(this.baseUrl + '/' + type + qs).then(response => response.json()).then(json => this._paging[type][size][page].sync({
-        links: json.links || {},
-        count: Object.keys(json.data).length,
-        model: this.sync(json)
-      }));
-    }
-
-    post(type, data) {
-      /*
-      data = {
-          id: '1',
-          attributes: {}
-      }
-      */
-    }
-
-  }
+    return JsonApi;
+  }(Model);
   /**
    * Store
    * @description Remote data store
@@ -602,8 +751,12 @@ var ActionUI = function (exports) {
    */
 
 
-  class Store {
-    constructor(options) {
+  var Store =
+  /*#__PURE__*/
+  function () {
+    function Store(options) {
+      _classCallCheck(this, Store);
+
       this.options = {
         'baseUrl': null,
         'types': null,
@@ -648,221 +801,282 @@ var ActionUI = function (exports) {
       this._cache = new Model(model);
     }
 
-    data(json) {
-      return this.options.keys.data ? json[this.options.keys.data] : json;
-    }
-
-    type(json) {
-      var type = json[this.options.keys.type];
-
-      if (this.options.types[type]) {
-        type = this.options.types[type];
+    _createClass(Store, [{
+      key: "data",
+      value: function data(json) {
+        return this.options.keys.data ? json[this.options.keys.data] : json;
       }
+    }, {
+      key: "type",
+      value: function type(json) {
+        var type = json[this.options.keys.type];
 
-      return type;
-    }
+        if (this.options.types[type]) {
+          type = this.options.types[type];
+        }
 
-    id(json) {
-      return json[this.options.keys.id];
-    }
-
-    sync(json) {
-      var data = this.data(json);
-
-      if (!data) {
-        throw new Error('Store: No data to sync');
+        return type;
       }
+    }, {
+      key: "id",
+      value: function id(json) {
+        return json[this.options.keys.id];
+      }
+    }, {
+      key: "sync",
+      value: function sync(json) {
+        var data = this.data(json);
 
-      if (data instanceof Array) {
-        var _collection = {};
+        if (!data) {
+          throw new Error('Store: No data to sync');
+        }
 
-        for (var i in data) {
-          var _data = null;
+        if (data instanceof Array) {
+          var _collection = {};
 
-          if (this.options.keys.data) {
-            _data = {};
-            _data[this.options.keys.data] = data[i];
-          } else {
-            _data = data[i];
+          for (var i in data) {
+            var _data = null;
+
+            if (this.options.keys.data) {
+              _data = {};
+              _data[this.options.keys.data] = data[i];
+            } else {
+              _data = data[i];
+            }
+
+            _collection[this.id(data[i])] = this.sync(_data);
           }
 
-          _collection[this.id(data[i])] = this.sync(_data);
+          return _collection;
         }
 
-        return _collection;
-      }
+        var type = this.type(data);
+        var id = this.id(data);
 
-      var type = this.type(data);
-      var id = this.id(data);
-
-      if (!this._cache[type]) {
-        this._cache[type] = new Model();
-      }
-
-      if (!this._cache[type][id]) {
-        this._cache[type][id] = new Model();
-      }
-
-      deepAssign(this._cache[type][id], data);
-      return this._cache[type][id];
-    }
-
-    url(options) {
-      var type = this.options.types[options.type] || options.type;
-      var url = this.options.baseUrl + '/' + type + (options.id ? '/' + options.id : '');
-      var query = [];
-
-      for (var i in options) {
-        if (i in this.options.query) {
-          query.push(this.options.query[i] + '=' + options[i]);
-        } else if (i != 'type' && i != 'id') {
-          query.push(i + '=' + options[i]);
+        if (!this._cache[type]) {
+          this._cache[type] = new Model();
         }
+
+        if (!this._cache[type][id]) {
+          this._cache[type][id] = new Model();
+        }
+
+        deepAssign(this._cache[type][id], data);
+        return this._cache[type][id];
       }
+    }, {
+      key: "url",
+      value: function url(options) {
+        var type = this.options.types[options.type] || options.type;
+        var url = this.options.baseUrl + '/' + type + (options.id ? '/' + options.id : '');
+        var query = [];
 
-      var qs = query.join('&');
+        for (var i in options) {
+          if (i in this.options.query) {
+            query.push(this.options.query[i] + '=' + options[i]);
+          } else if (i != 'type' && i != 'id') {
+            query.push(i + '=' + options[i]);
+          }
+        }
 
-      if (qs) {
-        url += '?' + qs;
+        var qs = query.join('&');
+
+        if (qs) {
+          url += '?' + qs;
+        }
+
+        return url;
       }
+    }, {
+      key: "search",
+      value: function search(query) {
+        var results = new Model();
 
-      return url;
-    }
+        for (var _type in this._cache) {
+          if (_type == '_paging' || query.type && this.type({
+            type: query.type
+          }) != _type) continue;
 
-    search(query) {
-      var results = new Model();
+          for (var _id in this._cache[_type]) {
+            var _match = true;
 
-      for (var _type in this._cache) {
-        if (_type == '_paging' || query.type && this.type({
-          type: query.type
-        }) != _type) continue;
+            var _data = this.data(this._cache[_type][_id]);
 
-        for (var _id in this._cache[_type]) {
-          var _match = true;
+            for (var _term in query) {
+              if (_term != 'type' && (!_data.hasOwnProperty(_term) || _data[_term] != query[_term])) {
+                _match = false;
+                break;
+              }
+            }
 
-          var _data = this.data(this._cache[_type][_id]);
-
-          for (var _term in query) {
-            if (_term != 'type' && (!_data.hasOwnProperty(_term) || _data[_term] != query[_term])) {
-              _match = false;
-              break;
+            if (_match) {
+              results[_id] = _data;
             }
           }
+        }
 
-          if (_match) {
-            results[_id] = _data;
+        return results;
+      }
+    }, {
+      key: "fetch",
+      value: function (_fetch2) {
+        function fetch(_x3, _x4) {
+          return _fetch2.apply(this, arguments);
+        }
+
+        fetch.toString = function () {
+          return _fetch2.toString();
+        };
+
+        return fetch;
+      }(function (type, id) {
+        var _this6 = this;
+
+        var query = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
+        type = this.type({
+          type: type
+        });
+
+        if (_typeof(id) == 'object') {
+          query = id;
+          id = query.id;
+        }
+
+        if (this._cache[type]) {
+          if (id != undefined && this._cache[type][id]) {
+            return Promise.resolve(this._cache[type][id]);
+          } else if (id == undefined && Object.keys(query).length == 0) {
+            return Promise.resolve(this._cache[type]);
+          } else if (id == undefined) {
+            query.type = type;
+            var search = this.search(query);
+
+            if (Object.keys(search).length) {
+              return Promise.resolve(search);
+            }
           }
         }
-      }
 
-      return results;
-    }
-
-    fetch(type, id) {
-      var query = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
-      type = this.type({
-        type: type
-      });
-
-      if (typeof id == 'object') {
-        query = id;
-        id = query.id;
-      }
-
-      if (this._cache[type]) {
-        if (id != undefined && this._cache[type][id]) {
-          return Promise.resolve(this._cache[type][id]);
-        } else if (id == undefined && Object.keys(query).length == 0) {
-          return Promise.resolve(this._cache[type]);
-        } else if (id == undefined) {
-          query.type = type;
-          var search = this.search(query);
-
-          if (Object.keys(search).length) {
-            return Promise.resolve(search);
-          }
-        }
-      }
-
-      Object.assign(query, {
-        type: type,
-        id: id
-      });
-      var url = this.url(query);
-      return fetch(url, this.options.fetch).then(response => response.json()).then(json => this.sync(json));
-    }
-
-    page(type) {
-      var page = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 1;
-      var size = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
-      size = parseInt(size) || this.options.per_page;
-      page = parseInt(page) || 1;
-      var cache = this._cache._paging;
-
-      if (type in cache && size in cache[type] && page in cache[type][size]) {
-        return Promise.resolve().then(() => cache[type][size][page]);
-      } else {
-        if (!(type in cache)) cache[type] = {};
-        if (!(size in cache[type])) cache[type][size] = {};
-        if (!(page in cache[type][size])) cache[type][size][page] = new Model({
+        Object.assign(query, {
           type: type,
-          number: page,
-          size: size,
-          count: 0,
-          links: {},
-          model: new Model()
+          id: id
+        });
+        var url = this.url(query);
+        return fetch(url, this.options.fetch).then(function (response) {
+          return response.json();
+        }).then(function (json) {
+          return _this6.sync(json);
+        });
+      })
+    }, {
+      key: "page",
+      value: function page(type) {
+        var _this7 = this;
+
+        var _page2 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 1;
+
+        var size = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
+        size = parseInt(size) || this.options.per_page;
+        _page2 = parseInt(_page2) || 1;
+        var cache = this._cache._paging;
+
+        if (type in cache && size in cache[type] && _page2 in cache[type][size]) {
+          return Promise.resolve().then(function () {
+            return cache[type][size][_page2];
+          });
+        } else {
+          if (!(type in cache)) cache[type] = {};
+          if (!(size in cache[type])) cache[type][size] = {};
+          if (!(_page2 in cache[type][size])) cache[type][size][_page2] = new Model({
+            type: type,
+            number: _page2,
+            size: size,
+            count: 0,
+            links: {},
+            model: new Model()
+          });
+        }
+
+        var url = this.url({
+          type: type,
+          'page[number]': _page2,
+          'page[size]': size
+        });
+        return fetch(url, this.options.fetch).then(function (response) {
+          return response.json();
+        }).then(function (json) {
+          return cache[type][size][_page2].sync({
+            links: json.links || {},
+            count: Object.keys(_this7.data(json)).length,
+            model: _this7.sync(json)
+          });
         });
       }
+    }, {
+      key: "post",
+      value: function post(type, data) {
+        var _this8 = this;
 
-      var url = this.url({
-        type: type,
-        'page[number]': page,
-        'page[size]': size
-      });
-      return fetch(url, this.options.fetch).then(response => response.json()).then(json => cache[type][size][page].sync({
-        links: json.links || {},
-        count: Object.keys(this.data(json)).length,
-        model: this.sync(json)
-      }));
-    }
+        var options = Object.create(this.options.fetch);
+        options.method = 'POST';
+        type = type || this.type(data);
+        var url = this.url({
+          type: type,
+          id: this.id(data)
+        });
+        return fetch(url, options).then(function (response) {
+          return response.json();
+        }).then(function (json) {
+          return _this8.sync(json);
+        });
+      }
+    }, {
+      key: "patch",
+      value: function patch(type, data) {
+        var _this9 = this;
 
-    post(type, data) {
-      var options = Object.create(this.options.fetch);
-      options.method = 'POST';
-      type = type || this.type(data);
-      var url = this.url({
-        type: type,
-        id: this.id(data)
-      });
-      return fetch(url, options).then(response => response.json()).then(json => this.sync(json));
-    }
+        var options = Object.create(this.options.fetch);
+        options.method = 'PATCH';
+        type = type || this.type(data);
+        var url = this.url({
+          type: type,
+          id: this.id(data)
+        });
+        return fetch(url, options).then(function (response) {
+          return response.json();
+        }).then(function (json) {
+          return _this9.sync(json);
+        });
+      }
+    }, {
+      key: "delete",
+      value: function _delete(type, id) {
+        var _this10 = this;
 
-    patch(type, data) {
-      var options = Object.create(this.options.fetch);
-      options.method = 'PATCH';
-      type = type || this.type(data);
-      var url = this.url({
-        type: type,
-        id: this.id(data)
-      });
-      return fetch(url, options).then(response => response.json()).then(json => this.sync(json));
-    }
+        var options = Object.create(this.options.fetch);
+        options.method = 'DELETE';
+        type = type || this.type(data);
+        var url = this.url({
+          type: type,
+          id: id
+        });
+        return fetch(url, options).then(function () {
+          return delete _this10._cache[type][id];
+        });
+      }
+    }]);
 
-    delete(type, id) {
-      var options = Object.create(this.options.fetch);
-      options.method = 'DELETE';
-      type = type || this.type(data);
-      var url = this.url({
-        type: type,
-        id: id
-      });
-      return fetch(url, options).then(() => delete this._cache[type][id]);
-    }
+    return Store;
+  }();
 
-  }
+  var StoreJsonApi =
+  /*#__PURE__*/
+  function (_Store) {
+    _inherits(StoreJsonApi, _Store);
 
-  class StoreJsonApi extends Store {
-    constructor(options) {
+    function StoreJsonApi(options) {
+      _classCallCheck(this, StoreJsonApi);
+
       var _options = {
         keys: {
           'data': 'data',
@@ -876,13 +1090,20 @@ var ActionUI = function (exports) {
         per_page: 0
       };
       deepAssign(_options, options || {});
-      super(_options);
+      return _possibleConstructorReturn(this, _getPrototypeOf(StoreJsonApi).call(this, _options));
     }
 
-  }
+    return StoreJsonApi;
+  }(Store);
 
-  class StoreWordpress extends Store {
-    constructor(options) {
+  var StoreWordpress =
+  /*#__PURE__*/
+  function (_Store2) {
+    _inherits(StoreWordpress, _Store2);
+
+    function StoreWordpress(options) {
+      _classCallCheck(this, StoreWordpress);
+
       var _options = {
         baseUrl: '/wp-json/wp/v2',
         types: {
@@ -904,21 +1125,25 @@ var ActionUI = function (exports) {
         per_page: 10
       };
       deepAssign(_options, options || {});
-      super(_options);
+      return _possibleConstructorReturn(this, _getPrototypeOf(StoreWordpress).call(this, _options));
     }
 
-    fetch(type, id) {
-      var query = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
+    _createClass(StoreWordpress, [{
+      key: "fetch",
+      value: function fetch(type, id) {
+        var query = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
 
-      if (typeof id == 'string') {
-        query.slug = id;
-        id = undefined;
+        if (typeof id == 'string') {
+          query.slug = id;
+          id = undefined;
+        }
+
+        return _get(_getPrototypeOf(StoreWordpress.prototype), "fetch", this).call(this, type, id, query);
       }
+    }]);
 
-      return super.fetch(type, id, query);
-    }
-
-  }
+    return StoreWordpress;
+  }(Store);
   /**
    * View
    * @description Creates a view that will be inserted into elements with
@@ -926,131 +1151,163 @@ var ActionUI = function (exports) {
    */
 
 
-  class View {
-    constructor(name, html, model) {
+  var View =
+  /*#__PURE__*/
+  function () {
+    function View(name, html, model) {
+      var _this11 = this;
+
+      _classCallCheck(this, View);
+
       if (!(model instanceof Model)) {
-        model = new Model(model || {});
+        model = new Model(model || {
+          controller: null,
+          data: {},
+          dev: false,
+          error: null,
+          method: null,
+          path: null,
+          view: null
+        });
       }
 
       this._name = name;
       this._html = html;
       this._model = model;
-      model.watch(changes => this.update(changes));
+      model.watch(function (changes) {
+        return _this11.update(changes);
+      });
 
       if (this.constructor.options.autoCache) {
         View.cache(this);
       }
     }
 
-    clear() {
-      document.querySelectorAll('[ui-view="' + this._name + '"]').forEach(_target => {
-        _target.innerHTML = '';
-      });
-      return this;
-    } // When the model updates
-
-
-    update(changes) {
-      if (this.constructor.options.verbose) console.info(this.constructor.name + '.update()', this.name, {
-        view: this,
-        changes: changes
-      });
-      this.render();
-    } // Render the model data into the view template for all elements with [ui-view=this.name]
-
-    /**
-     * Render view to all matching containers
-     * @returns Promise
-     */
-
-
-    render() {
-      if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
-        view: this
-      });
-      document.querySelectorAll('[ui-view="' + this._name + '"]').forEach(_target => {
-        _target.innerHTML = this.html;
-        this.renderSubviews(_target);
-      });
-      Object.assign(this.constructor.options.eventRender.detail, {
-        view: this
-      });
-      document.dispatchEvent(this.constructor.options.eventRender);
-      return Promise.resolve();
-    }
-
-    renderSubviews(parent) {
-      if (this.constructor.options.verbose) console.info(this.constructor.name + '.renderSubviews()', this.name, {
-        view: this,
-        parent: parent
-      });
-      parent.querySelectorAll('[ui-view]').forEach(_sub => {
-        var viewName = _sub.getAttribute('ui-view');
-
-        var view = this.constructor.cache(viewName);
-
-        if (view) {
-          view.render();
-        }
-      });
-    }
-
-    get name() {
-      return this._name;
-    }
-
-    get html() {
-      return this._html instanceof Function ? this._html(this._model) : this._html;
-    }
-
-    set html(html) {
-      this._html = html;
-    }
-
-    get model() {
-      return this._model;
-    } // #region Static methods
-    // View factory
-
-
-    static create(options) {
-      if (this.options.verbose) console.info(this.name + ':create()', {
-        options: options
-      });
-      return new this(options.name, options.html, options.model);
-    } // Cache a view 
-
-
-    static cache(view) {
-      if (this.options.verbose) console.info(this.name + ':cache()', {
-        view: view
-      });
-
-      if ('string' == typeof view) {
-        return _cache$1[view];
-      } else if (view instanceof View) {
-        if (view.name in _cache$1) {
-          throw 'View name already exists: "' + view.name + '"';
-        }
-
-        _cache$1[view.name] = view;
+    _createClass(View, [{
+      key: "clear",
+      value: function clear() {
+        document.querySelectorAll('[ui-view="' + this._name + '"]').forEach(function (_target) {
+          _target.innerHTML = '';
+        });
         return this;
+      } // When the model updates
+
+    }, {
+      key: "update",
+      value: function update(changes) {
+        if (this.constructor.options.verbose) console.info(this.constructor.name + '.update()', this.name, {
+          view: this,
+          changes: changes
+        });
+        this.render();
+      } // Render the model data into the view template for all elements with [ui-view=this.name]
+
+      /**
+       * Render view to all matching containers
+       * @returns Promise
+       */
+
+    }, {
+      key: "render",
+      value: function render() {
+        var _this12 = this;
+
+        if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
+          view: this
+        });
+        document.querySelectorAll('[ui-view="' + this._name + '"]').forEach(function (_target) {
+          _target.innerHTML = _this12.html;
+
+          _this12.renderSubviews(_target);
+        });
+        Object.assign(this.constructor.options.eventRender.detail, {
+          view: this
+        });
+        document.dispatchEvent(this.constructor.options.eventRender);
+        return Promise.resolve();
       }
+    }, {
+      key: "renderSubviews",
+      value: function renderSubviews(parent) {
+        var _this13 = this;
 
-      return _cache$1;
-    } // Render all views
+        if (this.constructor.options.verbose) console.info(this.constructor.name + '.renderSubviews()', this.name, {
+          view: this,
+          parent: parent
+        });
+        parent.querySelectorAll('[ui-view]').forEach(function (_sub) {
+          var viewName = _sub.getAttribute('ui-view');
 
+          var view = _this13.constructor.cache(viewName);
 
-    static get options() {
-      return _options$1;
-    }
+          if (view) {
+            view.render();
+          }
+        });
+      }
+    }, {
+      key: "name",
+      get: function get() {
+        return this._name;
+      }
+    }, {
+      key: "html",
+      get: function get() {
+        return this._html instanceof Function ? this._html(this._model) : this._html;
+      },
+      set: function set(html) {
+        this._html = html;
+      }
+    }, {
+      key: "model",
+      get: function get() {
+        return this._model;
+      } // #region Static methods
+      // View factory
 
-    static set options(value) {
-      deepAssign(_options$1, value);
-    } // #endregion
+    }], [{
+      key: "create",
+      value: function create(options) {
+        if (this.options.verbose) console.info(this.name + ':create()', {
+          options: options
+        });
+        return new this(options.name, options.html, options.model);
+      } // Cache a view 
 
+    }, {
+      key: "cache",
+      value: function cache(view) {
+        if (this.options.verbose) console.info(this.name + ':cache()', {
+          view: view
+        });
 
-  }
+        if ('string' == typeof view) {
+          return _cache$1[view];
+        } else if (view instanceof View) {
+          if (view.name in _cache$1) {
+            throw 'View name already exists: "' + view.name + '"';
+          }
+
+          _cache$1[view.name] = view;
+          return this;
+        }
+
+        return _cache$1;
+      } // Render all views
+
+    }, {
+      key: "options",
+      get: function get() {
+        return _options$1;
+      },
+      set: function set(value) {
+        deepAssign(_options$1, value);
+      } // #endregion
+
+    }]);
+
+    return View;
+  }();
 
   var _cache$1 = {};
   var _options$1 = {
@@ -1070,8 +1327,16 @@ var ActionUI = function (exports) {
    * @description View that fetches html from a file
    */
 
-  class ViewFile extends View {
-    constructor(name, file, model) {
+  var ViewFile =
+  /*#__PURE__*/
+  function (_View) {
+    _inherits(ViewFile, _View);
+
+    function ViewFile(name, file, model) {
+      var _this14;
+
+      _classCallCheck(this, ViewFile);
+
       if (arguments.length == 2) {
         model = file;
         file = undefined;
@@ -1081,84 +1346,112 @@ var ActionUI = function (exports) {
         file = name;
       }
 
-      super(name, null, model);
-      this.file = file;
+      _this14 = _possibleConstructorReturn(this, _getPrototypeOf(ViewFile).call(this, name, null, model));
+      _this14.file = file;
+      return _this14;
     }
 
-    clear() {
-      this.html = null;
-      return super.clear();
-    }
+    _createClass(ViewFile, [{
+      key: "clear",
+      value: function clear() {
+        this.html = null;
+        return _get(_getPrototypeOf(ViewFile.prototype), "clear", this).call(this);
+      }
+    }, {
+      key: "render",
+      value: function render() {
+        var _this15 = this;
 
-    render() {
-      if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
-        view: this
-      });
+        if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
+          view: this
+        });
 
-      var _promise = this._html == null ? this.fetch() : Promise.resolve();
+        var _promise = this._html == null ? this.fetch() : Promise.resolve();
 
-      return _promise.then(() => super.render());
-    }
-
-    fetch() {
-      if (this.constructor.options.verbose) console.info(this.constructor.name + '.fetch()', this.name, {
-        view: this
-      });
-      return fetch(this.fullPath).then(response => {
-        if (response.ok) {
-          return response.text();
-        } else {
-          throw new Error(response.statusText);
+        return _promise.then(function () {
+          return _get(_getPrototypeOf(ViewFile.prototype), "render", _this15).call(_this15);
+        });
+      }
+    }, {
+      key: "fetch",
+      value: function (_fetch3) {
+        function fetch() {
+          return _fetch3.apply(this, arguments);
         }
-      }).then(html => this._html = html).catch(e => {
-        throw new Error('File not found: ' + this.fileName);
-      });
-    }
 
-    get fileName() {
-      return this.file + '.' + this.constructor.options.extension;
-    }
+        fetch.toString = function () {
+          return _fetch3.toString();
+        };
 
-    get fullPath() {
-      return this.constructor.options.basePath + this.fileName;
-    }
+        return fetch;
+      }(function () {
+        var _this16 = this;
 
-    get file() {
-      return this._file;
-    }
-
-    set file(file) {
-      if (file != this._file) {
-        this._html = null;
+        if (this.constructor.options.verbose) console.info(this.constructor.name + '.fetch()', this.name, {
+          view: this
+        });
+        return fetch(this.fullPath).then(function (response) {
+          if (response.ok) {
+            return response.text();
+          } else {
+            throw new Error(response.statusText);
+          }
+        }).then(function (html) {
+          return _this16._html = html;
+        }).catch(function (e) {
+          throw new Error('File not found: ' + _this16.fileName);
+        });
+      })
+    }, {
+      key: "fileName",
+      get: function get() {
+        return this.file + '.' + this.constructor.options.extension;
       }
-
-      this._file = file;
-    } // #region Static methods
-    // View factory
-
-
-    static create(options) {
-      if (this.options.verbose) console.info(this.name + ':create()', {
-        options: options
-      });
-
-      if (options.file) {
-        options.file = options.name;
+    }, {
+      key: "fullPath",
+      get: function get() {
+        return this.constructor.options.basePath + this.fileName;
       }
+    }, {
+      key: "file",
+      get: function get() {
+        return this._file;
+      },
+      set: function set(file) {
+        if (file != this._file) {
+          this._html = null;
+        }
 
-      return new this(options.name, options.file, options.model);
-    }
+        this._file = file;
+      } // #region Static methods
+      // View factory
 
-    static get options() {
-      return _options$2;
-    }
+    }], [{
+      key: "create",
+      value: function create(options) {
+        if (this.options.verbose) console.info(this.name + ':create()', {
+          options: options
+        });
 
-    static set options(value) {
-      deepAssign(_options$2, value);
-    } // #endregion
+        if (options.file) {
+          options.file = options.name;
+        }
 
+        return new this(options.name, options.file, options.model);
+      }
+    }, {
+      key: "options",
+      get: function get() {
+        return _options$2;
+      },
+      set: function set(value) {
+        deepAssign(_options$2, value);
+      } // #endregion
 
-  }
+    }]);
+
+    return ViewFile;
+  }(View);
 
   var _options$2 = {
     basePath: 'view/',
@@ -1171,269 +1464,317 @@ var ActionUI = function (exports) {
    * @update Support for pre-compiled templates
    */
 
-  class ViewHandlebars extends ViewFile {
-    render() {
-      if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
-        view: this
-      });
+  var ViewHandlebars =
+  /*#__PURE__*/
+  function (_ViewFile) {
+    _inherits(ViewHandlebars, _ViewFile);
 
-      var _promise = _promise = Promise.resolve();
+    function ViewHandlebars() {
+      _classCallCheck(this, ViewHandlebars);
 
-      if (this.html == null && Handlebars.templates && Handlebars.templates[this.file]) {
-        this.html = Handlebars.templates[this.file];
+      return _possibleConstructorReturn(this, _getPrototypeOf(ViewHandlebars).apply(this, arguments));
+    }
+
+    _createClass(ViewHandlebars, [{
+      key: "render",
+      value: function render() {
+        var _this17 = this;
+
+        if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
+          view: this
+        });
+
+        var _promise = _promise = Promise.resolve();
+
+        if (this.html == null && Handlebars.templates && Handlebars.templates[this.file]) {
+          this.html = Handlebars.templates[this.file];
+        }
+
+        return _promise.then(function () {
+          return _get(_getPrototypeOf(ViewHandlebars.prototype), "render", _this17).call(_this17);
+        });
       }
+    }, {
+      key: "fetch",
+      value: function fetch() {
+        var _this18 = this;
 
-      return _promise.then(() => super.render());
-    }
+        return _get(_getPrototypeOf(ViewHandlebars.prototype), "fetch", this).call(this).then(function (html) {
+          if (!('templates' in Handlebars)) Handlebars.templates = [];
+          Handlebars.templates[_this18.file] = Handlebars.compile(html);
+          _this18.html = Handlebars.templates[_this18.file];
+          return html;
+        });
+      } // #region Static methods
 
-    fetch() {
-      return super.fetch().then(html => {
-        if (!('templates' in Handlebars)) Handlebars.templates = [];
-        Handlebars.templates[this.file] = Handlebars.compile(html);
-        this.html = Handlebars.templates[this.file];
-        return html;
-      });
-    } // #region Static methods
+    }], [{
+      key: "options",
+      get: function get() {
+        return _options$3;
+      },
+      set: function set(value) {
+        deepAssign(_options$3, value);
+      } // #endregion
 
+    }]);
 
-    static get options() {
-      return _options$3;
-    }
-
-    static set options(value) {
-      deepAssign(_options$3, value);
-    } // #endregion
-
-
-  }
+    return ViewHandlebars;
+  }(ViewFile);
 
   var _options$3 = {};
   ViewHandlebars.options = ViewFile.options;
   ViewHandlebars.options.extension = 'hbs';
 
-  class Router {
-    static start() {
-      window.addEventListener('popstate', this.onPopState.bind(this));
-
-      if (_options$4.interceptLinks) {
-        document.addEventListener('click', this.onClick.bind(this));
-      }
-
-      this.navigate(location.pathname);
+  var Router =
+  /*#__PURE__*/
+  function () {
+    function Router() {
+      _classCallCheck(this, Router);
     }
 
-    static navigate(route) {
-      var data = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
-      if (_options$4.verbose) console.info('Router.navigate()', {
-        router: this,
-        route: route,
-        data: data
-      });
-      var path = this.sanitizePath(route);
-      var pathController = path[0];
-      var pathMethod = path[1];
-      var controller = this.controllerName(pathController);
-      var model = {
-        data: data
-      };
+    _createClass(Router, null, [{
+      key: "start",
+      value: function start() {
+        window.addEventListener('popstate', this.onPopState.bind(this));
 
-      if (!this.controllers[controller]) {
-        pathController = _options$4.defaultController;
-        controller = this.controllerName(pathController);
-        pathMethod = route == '/' ? _options$4.defaultMethod : path[0];
-      }
-
-      if (!_cache$2[controller]) {
-        if (this.controllers[controller]) {
-          _cache$2[controller] = new this.controllers[controller](this.view);
-        } else {
-          _cache$2[controller] = new Controller(this.view);
+        if (_options$4.interceptLinks) {
+          document.addEventListener('click', this.onClick.bind(this));
         }
+
+        this.navigate(location.pathname);
       }
+    }, {
+      key: "navigate",
+      value: function navigate(route) {
+        var _this19 = this;
 
-      pathMethod = pathMethod || _options$4.defaultMethod;
-      var result = null;
-      var view = pathController + _options$4.pathSeparator + pathMethod;
-      var method = camelCase(pathMethod);
+        var data = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+        if (_options$4.verbose) console.info('Router.navigate()', {
+          router: this,
+          route: route,
+          data: data
+        });
+        var path = this.sanitizePath(route);
+        var pathController = path[0];
+        var pathMethod = path[1];
+        var controller = this.controllerName(pathController);
+        var model = {
+          data: data
+        };
 
-      if (_cache$2[controller].view instanceof ViewFile) {
-        _cache$2[controller].view.file = view;
-      } else if (_cache$2[controller].view instanceof ViewHandlebars) {
-        _cache$2[controller].view.html = view;
+        if (!this.controllers[controller]) {
+          pathController = _options$4.defaultController;
+          controller = this.controllerName(pathController);
+          pathMethod = route == '/' ? _options$4.defaultMethod : path[0];
+        }
+
+        if (!_cache$2[controller]) {
+          if (this.controllers[controller]) {
+            _cache$2[controller] = new this.controllers[controller](this.view);
+          } else {
+            _cache$2[controller] = new Controller(this.view);
+          }
+        }
+
+        pathMethod = pathMethod || _options$4.defaultMethod;
+        var result = null;
+        var view = pathController + _options$4.pathSeparator + pathMethod;
+        var method = camelCase(pathMethod);
+
+        if (_cache$2[controller].view instanceof ViewFile) {
+          _cache$2[controller].view.file = view;
+        } else if (_cache$2[controller].view instanceof ViewHandlebars) {
+          _cache$2[controller].view.html = view;
+        }
+
+        if (_options$4.autoload && !(_cache$2[controller][method] instanceof Function)) {
+          method = _options$4.autoloadMethod;
+        }
+
+        model.dev = location.host == _options$4.devHost;
+        model.view = view;
+        model.controller = pathController;
+        model.method = pathMethod;
+        model.path = Array.from(path); // Query string to object
+
+        var search = location.search.substring(1);
+
+        if (search) {
+          search = JSON.parse('{"' + decodeURI(search).replace(/"/g, '\\"').replace(/&/g, '","').replace(/=/g, '":"') + '"}');
+          model.search = search;
+        }
+
+        try {
+          var args = Array.from(path);
+          args.shift();
+          args.shift();
+          args.push(search);
+          args.push(data);
+
+          _cache$2[controller].view.model.clear().sync(model).clearChanges();
+
+          result = _cache$2[controller][method].apply(_cache$2[controller], args);
+        } catch (e) {
+          result = this.handleError(controller, model, path);
+        }
+
+        if (location.pathname != route) {
+          deepAssign(this.state, {
+            route: route,
+            controller: pathController,
+            method: pathMethod,
+            data: Object.assign({}, data),
+            search: search
+          });
+          history.pushState(this.state, null, route);
+        }
+
+        if (result instanceof Promise) {
+          var viewContainer = document.querySelectorAll('[ui-view="' + this.view.name + '"]');
+          this.handleLoading(viewContainer, true);
+          result.then(function () {
+            return _this19.handleLoading(viewContainer, false);
+          }).catch(function (e) {
+            _this19.handleLoading(viewContainer, false);
+
+            _this19.handleError(controller, model, path, e);
+
+            throw e;
+          });
+        }
+
+        return result;
       }
+    }, {
+      key: "handleLoading",
+      value: function handleLoading(elements, loading) {
+        if (loading) {
+          elements.forEach(function (el) {
+            return el.classList.add(_options$4.cssClass.loading);
+          });
+        } else {
+          elements.forEach(function (el) {
+            return el.classList.remove(_options$4.cssClass.loading);
+          });
+        }
 
-      if (_options$4.autoload && !(_cache$2[controller][method] instanceof Function)) {
-        method = _options$4.autoloadMethod;
+        return this;
       }
+    }, {
+      key: "handleError",
+      value: function handleError(controller, model, path, error) {
+        model.error = error;
+        model.view = model.controller + _options$4.pathSeparator + _options$4.errorView;
+        model.path = path.join(_options$4.pathSeparator);
 
-      model.dev = location.host == _options$4.devHost;
-      model.view = view;
-      model.controller = pathController;
-      model.method = pathMethod;
-      model.path = Array.from(path); // Query string to object
-
-      var search = location.search.substring(1);
-
-      if (search) {
-        search = JSON.parse('{"' + decodeURI(search).replace(/"/g, '\\"').replace(/&/g, '","').replace(/=/g, '":"') + '"}');
-        model.search = search;
-      }
-
-      try {
-        var args = Array.from(path);
-        args.shift();
-        args.shift();
-        args.push(search);
-        args.push(data);
+        if (_cache$2[controller].view instanceof ViewFile) {
+          _cache$2[controller].view.file = (_options$4.useControllerErrorViews ? model.controller + _options$4.pathSeparator : '') + _options$4.errorView;
+        } else {
+          _cache$2[controller].view.html = 'Error loading ' + model.path;
+        }
 
         _cache$2[controller].view.model.clear().sync(model).clearChanges();
 
-        result = _cache$2[controller][method].apply(_cache$2[controller], args);
-      } catch (e) {
-        result = this.handleError(controller, model, path);
+        return _cache$2[controller][_options$4.errorMethod]();
       }
-
-      if (location.pathname != route) {
-        deepAssign(this.state, {
-          route: route,
-          controller: pathController,
-          method: pathMethod,
-          data: Object.assign({}, data),
-          search: search
+    }, {
+      key: "sanitizePath",
+      value: function sanitizePath(path) {
+        if (_options$4.verbose) console.info('Router.sanitizePath()', {
+          router: this,
+          path: path
         });
-        history.pushState(this.state, null, route);
-      }
 
-      if (result instanceof Promise) {
-        var viewContainer = document.querySelectorAll('[ui-view="' + this.view.name + '"]');
-        this.handleLoading(viewContainer, true);
-        result.then(() => this.handleLoading(viewContainer, false)).catch(e => {
-          this.handleLoading(viewContainer, false);
-          this.handleError(controller, model, path, e);
-          throw e;
+        if ('string' == typeof path) {
+          path = path.split('/');
+          path.shift();
+          path[0] = path[0] || _options$4.defaultController;
+        }
+
+        for (var i in path) {
+          path[i] = (path[i] + '').toLowerCase();
+        }
+
+        if (path.length == 1) {
+          path.push(_options$4.defaultMethod);
+        }
+
+        return path;
+      }
+    }, {
+      key: "controllerName",
+      value: function controllerName(name) {
+        if (_options$4.verbose) console.info('Router.controllerName()', {
+          router: this,
+          name: name
         });
+        return capitalize(camelCase(name)) + 'Controller';
       }
-
-      return result;
-    }
-
-    static handleLoading(elements, loading) {
-      if (loading) {
-        elements.forEach(el => el.classList.add(_options$4.cssClass.loading));
-      } else {
-        elements.forEach(el => el.classList.remove(_options$4.cssClass.loading));
+    }, {
+      key: "onClick",
+      value: function onClick(e) {
+        // Intercept links
+        if (e.target.tagName == 'A' && e.target.pathname) {
+          e.preventDefault();
+          this.navigate(e.target.pathname, Object.assign({}, e.target.dataset));
+        }
       }
+    }, {
+      key: "onPopState",
+      value: function onPopState(e) {
+        if (_options$4.verbose) console.info('Router.changeState()', {
+          router: this,
+          event: e
+        });
+        var route = location.pathname;
+        var data = {};
 
-      return this;
-    }
+        if (e.state) {
+          route = e.state.route;
+          data = e.state.data;
+        }
 
-    static handleError(controller, model, path, error) {
-      model.error = error;
-      model.view = model.controller + _options$4.pathSeparator + _options$4.errorView;
-      model.path = path.join(_options$4.pathSeparator);
+        this.navigate(route, data);
+      } // #region Properties
 
-      if (_cache$2[controller].view instanceof ViewFile) {
-        _cache$2[controller].view.file = (_options$4.useControllerErrorViews ? model.controller + _options$4.pathSeparator : '') + _options$4.errorView;
-      } else {
-        _cache$2[controller].view.html = 'Error loading ' + model.path;
+    }, {
+      key: "controllers",
+      get: function get() {
+        return this.options.controllers;
+      },
+      set: function set(value) {
+        this.options.controllers = value;
       }
-
-      _cache$2[controller].view.model.clear().sync(model).clearChanges();
-
-      return _cache$2[controller][_options$4.errorMethod]();
-    }
-
-    static sanitizePath(path) {
-      if (_options$4.verbose) console.info('Router.sanitizePath()', {
-        router: this,
-        path: path
-      });
-
-      if ('string' == typeof path) {
-        path = path.split('/');
-        path.shift();
-        path[0] = path[0] || _options$4.defaultController;
+    }, {
+      key: "state",
+      get: function get() {
+        return this.options.state;
+      },
+      set: function set(value) {
+        this.options.state = value;
       }
-
-      for (var i in path) {
-        path[i] = (path[i] + '').toLowerCase();
+    }, {
+      key: "view",
+      get: function get() {
+        if (!(this.options.view instanceof View)) this.view = this.options.view;
+        return this.options.view;
+      },
+      set: function set(value) {
+        this.options.view = value instanceof View ? value : new ViewFile(value);
       }
+    }, {
+      key: "options",
+      get: function get() {
+        return _options$4;
+      },
+      set: function set(value) {
+        deepAssign(_options$4, value);
+      } // #endregion
 
-      if (path.length == 1) {
-        path.push(_options$4.defaultMethod);
-      }
+    }]);
 
-      return path;
-    }
-
-    static controllerName(name) {
-      if (_options$4.verbose) console.info('Router.controllerName()', {
-        router: this,
-        name: name
-      });
-      return capitalize(camelCase(name)) + 'Controller';
-    }
-
-    static onClick(e) {
-      // Intercept links
-      if (e.target.tagName == 'A' && e.target.pathname) {
-        e.preventDefault();
-        this.navigate(e.target.pathname, Object.assign({}, e.target.dataset));
-      }
-    }
-
-    static onPopState(e) {
-      if (_options$4.verbose) console.info('Router.changeState()', {
-        router: this,
-        event: e
-      });
-      var route = location.pathname;
-      var data = {};
-
-      if (e.state) {
-        route = e.state.route;
-        data = e.state.data;
-      }
-
-      this.navigate(route, data);
-    } // #region Properties
-
-
-    static get controllers() {
-      return this.options.controllers;
-    }
-
-    static set controllers(value) {
-      this.options.controllers = value;
-    }
-
-    static get state() {
-      return this.options.state;
-    }
-
-    static set state(value) {
-      this.options.state = value;
-    }
-
-    static get view() {
-      if (!(this.options.view instanceof View)) this.view = this.options.view;
-      return this.options.view;
-    }
-
-    static set view(value) {
-      this.options.view = value instanceof View ? value : new ViewFile(value);
-    }
-
-    static get options() {
-      return _options$4;
-    }
-
-    static set options(value) {
-      deepAssign(_options$4, value);
-    } // #endregion
-
-
-  }
+    return Router;
+  }();
 
   var _cache$2 = {};
   var _options$4 = {

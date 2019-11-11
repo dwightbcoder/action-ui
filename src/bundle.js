@@ -78,50 +78,72 @@ var ActionUI = (function (exports) {
      * Model
      * @description Observable data object
      */
-    const _changes  = new WeakMap();
-    const _watchers = new WeakMap();
-    const _timer    = new WeakMap();
-    const _trigger_delay = 10;
 
     class Model
     {
         constructor(data = {})
         {
-            _changes.set(this, {});
-            _watchers.set(this, []);
-            _timer.set(this, null);
+            this._options = { triggerDelay: 10 };
+            this._changes = {};
+            this._watchers = [];
+            this._timer = null;
+            this._privatize();
 
-            let _proxy = new Proxy(this,
+            deepAssign(this, data); // Pre-init required by IE11
+
+            let proxySet = (target, prop, value) =>
+            {
+                let originalValue = target[prop];
+                if ( window.Reflect && window.Reflect.set )
                 {
-                    get: (target, prop) => (prop == 'watch' || prop == 'clearChanges') ? function(){ return target[prop].apply(target, arguments) } : Reflect.get(target, prop),
-                    set: (target, prop, value) =>
-                    {
-                        let originalValue = target[prop];
-                        Reflect.set(target, prop, value);
-                        target._change(target, prop, value, originalValue);
-                        return true
-                    },
-                    deleteProperty: (target, prop) =>
-                    {
-                        if (prop in target)
-                        {
-                            let originalValue = target[prop];
-                            delete target[prop];
-                            target._change(target, prop, undefined, originalValue);
-                        }
-                        return true
-                    }
-                });
+                    Reflect.set(target, prop, value);
+                }
+                target._change(prop, value, originalValue);
+                return true
+            };
+
+            let proxyDelete = (target, prop) =>
+            {
+                if (prop in target)
+                {
+                    let originalValue = target[prop];
+                    delete target[prop];
+                    target._change(prop, undefined, originalValue);
+                }
+                return true
+            };
+
+            let proxy = null;
+
+            try
+            {
+                proxy = new Proxy(this, {set:proxySet, deleteProperty:proxyDelete});
+            }
+            catch(e)
+            {
+                // IE11 Proxy polyfill does not support delete
+                proxy = new Proxy(this, {set:proxySet});
+            }
             
-            deepAssign(_proxy, data);
-            return _proxy
+            deepAssign(this, data);
+            return proxy
         }
 
         clear()
         {
             for ( let i in this )
             {
-                delete this[i];
+                try
+                {
+                    delete this[i];
+                }
+                catch(e)
+                {
+                    // Fallback for IE11
+                    let originalValue = this[i];
+                    this[i] = undefined;
+                    this._change(i, undefined, originalValue);
+                }
             }
 
             return this
@@ -138,47 +160,54 @@ var ActionUI = (function (exports) {
         // Add watcher callback
         watch(callback)
         {
-            _watchers.get(this).push(callback);
+            this._watchers.push(callback);
             return this
         }
 
         clearChanges()
         {
-            //console.log('clearChanges',this)
-            _changes.set(this, {});
+            this._changes = {};
             return this
+        }
+
+        _privatize()
+        {
+            for ( let i in this )
+            {
+                if ( i[0] == "_" )
+                {
+                    Object.defineProperty(this, i, {enumerable:false});
+                }
+            }
         }
 
         // Trigger all watcher callbacks
         _trigger()
         {
-            window.clearTimeout(_timer.get(this));
-            _timer.set(this, null);
+            window.clearTimeout(this._timer);
+            this._timer = null;
 
-            let changes = _changes.get(this);
-
-            if (Object.keys(changes).length > 0)
+            if (Object.keys(this._changes).length > 0)
             {
-                //console.log('changes',changes,this)
-                let callbacks = _watchers.get(this);
+                let callbacks = this._watchers;
                 for(let i in callbacks)
                 {
-                    callbacks[i].call(this, changes);
+                    callbacks[i].call(this, this._changes);
                 }
 
                 // Clear change list
-                _changes.set(this, {});
+                this._changes = {};
             }
         }
 
         // Log property change
-        _change(target, prop, value, originalValue)
+        _change(prop, value, originalValue)
         {
-            _changes.get(target)[prop] = {value:value, originalValue:originalValue};
+            this._changes[prop] = {value:value, originalValue:originalValue};
 
-            if (! _timer.get(target))
+            if (! this._timer)
             {
-                _timer.set(target, window.setTimeout(() => target._trigger(), _trigger_delay));
+                this._timer = window.setTimeout(() => this._trigger(), this._options.triggerDelay);
             }
         }
     }
@@ -1000,7 +1029,7 @@ var ActionUI = (function (exports) {
         {
             if (!(model instanceof Model))
             {
-                model = new Model(model || {});
+                model = new Model(model || {controller:null, data:{}, dev:false, error:null, method:null, path:null, view:null});
             }
 
             this._name = name;

@@ -4,8 +4,12 @@
         <meta charset="utf-8" />
         <base href="/">
         <title>Action UI SPA (Basic)</title>
+        <!-- Polyfills -->
+        <script src="https://cdn.jsdelivr.net/npm/proxy-polyfill"></script>
+        <script src="https://polyfill.io/v3/polyfill.min.js?features=default%2Ces5%2Ces6%2Cfetch%2CNodeList.prototype.forEach"></script>
+        <!-- /Polyfills -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/handlebars.js/4.4.0/handlebars.min.js"></script>
-        <script src="action-ui.min.js"></script>
+        <script src="action-ui.js"></script>
     </head>
     <body>
         <h1><a href="./">Basic Single-Page Application</a></h1>
