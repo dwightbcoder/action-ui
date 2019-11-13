@@ -9,19 +9,33 @@
         <script src="https://polyfill.io/v3/polyfill.min.js?features=default%2Ces5%2Ces6%2Cfetch%2CNodeList.prototype.forEach"></script>
         <!-- /Polyfills -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/handlebars.js/4.4.0/handlebars.min.js"></script>
-        <script src="action-ui.js"></script>
+        <script src="action-ui.min.js"></script>
     </head>
     <body>
         <h1><a href="./">Basic Single-Page Application</a></h1>
         <main ui-view="controller"></main>
         <script>
             // Configure router for simple flat view hierarchy
+            //ActionUI.Router.options.verbose = true
             ActionUI.Router.options.pathSeparator = '.'
+            ActionUI.Router.route('/manual/test', function(){alert('Manual Test')})
+            ActionUI.Router.route('/manual/redirect', '/manual/test')
+            ActionUI.Router.route('/manual/action', new ActionUI.Action(
+                'routed action',
+                function(resolve, reject, data)
+                {
+                    alert(this.name)
+                    console.info('action', {_:this,a:arguments,data:data})
+                    resolve(data)
+                }
+            ))
+
             ActionUI.ViewFile.options =
             {
                 basePath: '',
                 extension: 'view.html'
             }
+
 
             // Start routing
             ActionUI.Router.start()

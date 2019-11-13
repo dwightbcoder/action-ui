@@ -1304,7 +1304,43 @@ var ActionUI = (function (exports) {
             this.navigate(location.pathname);
         }
 
-        static navigate(route, data = {})
+        static route(route, callback, priority = 0)
+        {
+            this.options.routes[route] = { route: route, callback: callback, priority: priority };
+        }
+
+        static match(route, follow = true)
+        {
+            // Exact match
+            if ( this.options.routes[route] )
+            {
+                if ( follow && typeof this.options.routes[route].callback == "string" )
+                {
+                    return this.match(this.options.routes[route].callback)
+                }
+
+                return this.options.routes[route]
+            }
+
+            let _match = null;
+            for ( let _route in Object.keys(this.options.routes) )
+            {
+                if ( route.match(_route) != null && (_match == null || this.options.routes[_route].priority <= _match.priority) )
+                {
+                    _match = this.options.routes[_route];
+                }
+            }
+
+            // If route is a forward
+            if ( _match && follow && typeof _match.callback == "string" )
+            {
+                _match = this.match(_match.callback);
+            }
+            
+            return _match
+        }
+
+        static navigate(route, data = {}, event = null )
         {
             if (_options$4.verbose) console.info('Router.navigate()', {router:this, route:route, data:data});
 
@@ -1313,6 +1349,13 @@ var ActionUI = (function (exports) {
             let pathMethod = path[1];
             let controller = this.controllerName(pathController);
             let model = { data: data };
+            let match = this.match(route, false);
+
+            if ( match && typeof match.callback == "string" )
+            {
+                // Redirect
+                return this.navigate(match.callback, data, event)
+            }
 
             if (! this.controllers[controller])
             {
@@ -1357,6 +1400,7 @@ var ActionUI = (function (exports) {
             model.controller = pathController;
             model.method = pathMethod;
             model.path = Array.from(path);
+            model.event = event;
 
             // Query string to object
             let search = location.search.substring(1);
@@ -1373,32 +1417,60 @@ var ActionUI = (function (exports) {
                 args.shift();
                 args.push(search);
                 args.push(data);
-
-                _cache$2[controller].view.model
-                    .clear()
-                    .sync(model)
-                    .clearChanges();
                 
-                result = _cache$2[controller][method]
-                    .apply(_cache$2[controller], args);
+                if ( match )
+                {
+                    if ( match.callback instanceof Action )
+                    {
+                        match.callback.model
+                            .clear()
+                            .sync(model)
+                            .clearChanges();
+
+                        let target = event ? event.target : document;
+                        result = match.callback.run(target, data);
+                    }
+                    else
+                    {
+                        args.push(model);
+
+                        result = match.callback
+                            .apply(_cache$2[controller], args);
+                    }
+                }
+                else
+                {
+                    _cache$2[controller].view.model
+                        .clear()
+                        .sync(model)
+                        .clearChanges();
+
+                    result = _cache$2[controller][method]
+                        .apply(_cache$2[controller], args);
+                    
+                    this.pushState(route, {
+                        controller: pathController,
+                        method: pathMethod,
+                        data: Object.assign({}, data),
+                        search: search
+                    });
+                }
             }
             catch(e)
             {
-                result = this.handleError(controller, model, path);
-            }
-
-            if (location.pathname != route)
-            {
-                deepAssign(this.state,
+                if ( this.options.verbose )
                 {
-                    route: route,
+                    console.error('Routing Error', e);
+                }
+
+                this.pushState(route, {
                     controller: pathController,
                     method: pathMethod,
                     data: Object.assign({}, data),
                     search: search
                 });
 
-                history.pushState(this.state, null, route);
+                result = this.handleError(controller, model, path);
             }
 
             if ( result instanceof Promise )
@@ -1484,13 +1556,23 @@ var ActionUI = (function (exports) {
             return capitalize(camelCase(name)) + 'Controller'
         }
 
+        static pushState(route, data = {})
+        {
+            if (location.pathname != route)
+            {
+                data.route = route;
+                deepAssign(this.state, data);
+                history.pushState(this.state, null, route);
+            }
+        }
+
         static onClick(e)
         {
             // Intercept links
             if (e.target.tagName == 'A' && e.target.pathname)
             {
                 e.preventDefault();
-                this.navigate(e.target.pathname, Object.assign({}, e.target.dataset));
+                this.navigate(e.target.pathname, Object.assign({}, e.target.dataset), e);
             }
         }
 
@@ -1543,7 +1625,8 @@ var ActionUI = (function (exports) {
         useControllerErrorViews: false,
         devHost: 'localhost',
         interceptLinks: true,
-        pathSeparator: '/'
+        pathSeparator: '/',
+        routes: {}
     };
 
     exports.Action = Action;
