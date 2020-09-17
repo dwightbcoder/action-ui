@@ -296,7 +296,17 @@ var ActionUI = function (exports) {
             }
 
             if (_options2.method == 'POST') {
-              _options2.body = JSON.stringify(data);
+              if (target.attributes.enctype.value == 'application/json') {
+                _options2.body = JSON.stringify(data);
+              } else {
+                var formData = new FormData();
+
+                for (var key in data) {
+                  formData.append(key, data[key]);
+                }
+
+                _options2.body = formData;
+              }
             } else if (_options2.method == 'GET') {
               // Append query string to URL with ?/& first as needed
               _options2.url += (_options2.url.indexOf('?') < 0 ? '?' : '&') + Object.keys(data).map(function (key) {

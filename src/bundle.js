@@ -257,7 +257,16 @@ var ActionUI = (function (exports) {
 
                     if (options.method == 'POST')
                     {
-                        options.body = JSON.stringify(data);
+                        if (  target.attributes.enctype.value == 'application/json' )
+                        {
+                            options.body = JSON.stringify(data);
+                        }
+                        else
+                        {
+                            let formData = new FormData();
+                            for ( let key in data ) formData.append(key, data[key]);
+                            options.body = formData;
+                        }
                     }
                     else if (options.method == 'GET')
                     {
