@@ -1,6 +1,6 @@
 {
   "name": "@dwightbcoder/action-ui",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "Action UI is a Javascript framework to simplify connecting actions to user interface elements",
   "main": "dist/action-ui.min.js",
   "directories": {
@@ -39,9 +39,9 @@
   "bugs": "https://github.com/dwightbcoder/action-ui/issues",
   "homepage": "https://github.com/dwightbcoder/action-ui#readme",
   "devDependencies": {
-    "@babel/cli": "^7.7.0",
-    "@babel/core": "^7.7.2",
-    "@babel/preset-env": "^7.7.1",
+    "@babel/cli": "^7.11.6",
+    "@babel/core": "^7.11.6",
+    "@babel/preset-env": "^7.11.5",
     "babel-preset-minify": "^0.5.1"
   }
 }

@@ -4,17 +4,21 @@ function _get(target, property, receiver) { if (typeof Reflect !== "undefined" &
 
 function _superPropBase(object, property) { while (!Object.prototype.hasOwnProperty.call(object, property)) { object = _getPrototypeOf(object); if (object === null) break; } return object; }
 
-function _typeof(obj) { if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
+function _typeof(obj) { "@babel/helpers - typeof"; if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
+
+function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function"); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, writable: true, configurable: true } }); if (superClass) _setPrototypeOf(subClass, superClass); }
+
+function _setPrototypeOf(o, p) { _setPrototypeOf = Object.setPrototypeOf || function _setPrototypeOf(o, p) { o.__proto__ = p; return o; }; return _setPrototypeOf(o, p); }
+
+function _createSuper(Derived) { var hasNativeReflectConstruct = _isNativeReflectConstruct(); return function _createSuperInternal() { var Super = _getPrototypeOf(Derived), result; if (hasNativeReflectConstruct) { var NewTarget = _getPrototypeOf(this).constructor; result = Reflect.construct(Super, arguments, NewTarget); } else { result = Super.apply(this, arguments); } return _possibleConstructorReturn(this, result); }; }
 
 function _possibleConstructorReturn(self, call) { if (call && (_typeof(call) === "object" || typeof call === "function")) { return call; } return _assertThisInitialized(self); }
 
 function _assertThisInitialized(self) { if (self === void 0) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return self; }
 
+function _isNativeReflectConstruct() { if (typeof Reflect === "undefined" || !Reflect.construct) return false; if (Reflect.construct.sham) return false; if (typeof Proxy === "function") return true; try { Date.prototype.toString.call(Reflect.construct(Date, [], function () {})); return true; } catch (e) { return false; } }
+
 function _getPrototypeOf(o) { _getPrototypeOf = Object.setPrototypeOf ? Object.getPrototypeOf : function _getPrototypeOf(o) { return o.__proto__ || Object.getPrototypeOf(o); }; return _getPrototypeOf(o); }
-
-function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function"); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, writable: true, configurable: true } }); if (superClass) _setPrototypeOf(subClass, superClass); }
-
-function _setPrototypeOf(o, p) { _setPrototypeOf = Object.setPrototypeOf || function _setPrototypeOf(o, p) { o.__proto__ = p; return o; }; return _setPrototypeOf(o, p); }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
@@ -72,9 +76,7 @@ var ActionUI = function (exports) {
     return firstMatchingParentElement(element.parentElement, selector);
   }
 
-  var util =
-  /*#__PURE__*/
-  Object.freeze({
+  var util = /*#__PURE__*/Object.freeze({
     __proto__: null,
     deepAssign: deepAssign,
     requestFromElement: requestFromElement,
@@ -88,9 +90,7 @@ var ActionUI = function (exports) {
    * @description Observable data object
    */
 
-  var Model =
-  /*#__PURE__*/
-  function () {
+  var Model = /*#__PURE__*/function () {
     function Model() {
       var data = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
 
@@ -243,9 +243,7 @@ var ActionUI = function (exports) {
    */
 
 
-  var Action =
-  /*#__PURE__*/
-  function () {
+  var Action = /*#__PURE__*/function () {
     function Action(name, handler, model) {
       _classCallCheck(this, Action);
 
@@ -296,7 +294,7 @@ var ActionUI = function (exports) {
             }
 
             if (_options2.method == 'POST') {
-              if (target.attributes.enctype.value == 'application/json') {
+              if (target.attributes.enctype && target.attributes.enctype.value == 'application/json') {
                 _options2.body = JSON.stringify(data);
               } else {
                 var formData = new FormData();
@@ -569,9 +567,7 @@ var ActionUI = function (exports) {
    * Provider route mapping for SPAs
    */
 
-  var Controller =
-  /*#__PURE__*/
-  function () {
+  var Controller = /*#__PURE__*/function () {
     function Controller(view) {
       _classCallCheck(this, Controller);
 
@@ -607,10 +603,10 @@ var ActionUI = function (exports) {
    */
 
 
-  var JsonApi =
-  /*#__PURE__*/
-  function (_Model) {
+  var JsonApi = /*#__PURE__*/function (_Model) {
     _inherits(JsonApi, _Model);
+
+    var _super = _createSuper(JsonApi);
 
     function JsonApi(baseUrl, model) {
       var _this3;
@@ -629,7 +625,7 @@ var ActionUI = function (exports) {
       }
 
       model._paging = {};
-      _this3 = _possibleConstructorReturn(this, _getPrototypeOf(JsonApi).call(this, model));
+      _this3 = _super.call(this, model);
       _this3.baseUrl = baseUrl;
       return _this3;
     }
@@ -761,9 +757,7 @@ var ActionUI = function (exports) {
    */
 
 
-  var Store =
-  /*#__PURE__*/
-  function () {
+  var Store = /*#__PURE__*/function () {
     function Store(options) {
       _classCallCheck(this, Store);
 
@@ -1079,10 +1073,10 @@ var ActionUI = function (exports) {
     return Store;
   }();
 
-  var StoreJsonApi =
-  /*#__PURE__*/
-  function (_Store) {
+  var StoreJsonApi = /*#__PURE__*/function (_Store) {
     _inherits(StoreJsonApi, _Store);
+
+    var _super2 = _createSuper(StoreJsonApi);
 
     function StoreJsonApi(options) {
       _classCallCheck(this, StoreJsonApi);
@@ -1100,16 +1094,16 @@ var ActionUI = function (exports) {
         per_page: 0
       };
       deepAssign(_options, options || {});
-      return _possibleConstructorReturn(this, _getPrototypeOf(StoreJsonApi).call(this, _options));
+      return _super2.call(this, _options);
     }
 
     return StoreJsonApi;
   }(Store);
 
-  var StoreWordpress =
-  /*#__PURE__*/
-  function (_Store2) {
+  var StoreWordpress = /*#__PURE__*/function (_Store2) {
     _inherits(StoreWordpress, _Store2);
+
+    var _super3 = _createSuper(StoreWordpress);
 
     function StoreWordpress(options) {
       _classCallCheck(this, StoreWordpress);
@@ -1135,7 +1129,7 @@ var ActionUI = function (exports) {
         per_page: 10
       };
       deepAssign(_options, options || {});
-      return _possibleConstructorReturn(this, _getPrototypeOf(StoreWordpress).call(this, _options));
+      return _super3.call(this, _options);
     }
 
     _createClass(StoreWordpress, [{
@@ -1161,9 +1155,7 @@ var ActionUI = function (exports) {
    */
 
 
-  var View =
-  /*#__PURE__*/
-  function () {
+  var View = /*#__PURE__*/function () {
     function View(name, html, model) {
       var _this11 = this;
 
@@ -1337,10 +1329,10 @@ var ActionUI = function (exports) {
    * @description View that fetches html from a file
    */
 
-  var ViewFile =
-  /*#__PURE__*/
-  function (_View) {
+  var ViewFile = /*#__PURE__*/function (_View) {
     _inherits(ViewFile, _View);
+
+    var _super4 = _createSuper(ViewFile);
 
     function ViewFile(name, file, model) {
       var _this14;
@@ -1356,7 +1348,7 @@ var ActionUI = function (exports) {
         file = name;
       }
 
-      _this14 = _possibleConstructorReturn(this, _getPrototypeOf(ViewFile).call(this, name, null, model));
+      _this14 = _super4.call(this, name, null, model);
       _this14.file = file;
       return _this14;
     }
@@ -1474,15 +1466,15 @@ var ActionUI = function (exports) {
    * @update Support for pre-compiled templates
    */
 
-  var ViewHandlebars =
-  /*#__PURE__*/
-  function (_ViewFile) {
+  var ViewHandlebars = /*#__PURE__*/function (_ViewFile) {
     _inherits(ViewHandlebars, _ViewFile);
+
+    var _super5 = _createSuper(ViewHandlebars);
 
     function ViewHandlebars() {
       _classCallCheck(this, ViewHandlebars);
 
-      return _possibleConstructorReturn(this, _getPrototypeOf(ViewHandlebars).apply(this, arguments));
+      return _super5.apply(this, arguments);
     }
 
     _createClass(ViewHandlebars, [{
@@ -1535,9 +1527,7 @@ var ActionUI = function (exports) {
   ViewHandlebars.options = ViewFile.options;
   ViewHandlebars.options.extension = 'hbs';
 
-  var Router =
-  /*#__PURE__*/
-  function () {
+  var Router = /*#__PURE__*/function () {
     function Router() {
       _classCallCheck(this, Router);
     }

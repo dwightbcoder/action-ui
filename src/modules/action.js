@@ -46,7 +46,7 @@ class Action
 
                 if (options.method == 'POST')
                 {
-                    if (  target.attributes.enctype.value == 'application/json' )
+                    if ( target.attributes.enctype && target.attributes.enctype.value == 'application/json' )
                     {
                         options.body = JSON.stringify(data)
                     }
