@@ -404,6 +404,7 @@ var ActionUI = function (exports) {
           var target = firstMatchingParentElement(e.target, '[ui-action]');
 
           if (target && target.tagName != 'FORM') {
+            e.preventDefault();
             var actionName = target.getAttribute('ui-action'); // Don't run the action if it's already running
 
             if (actionName in _cache) {
@@ -752,6 +753,7 @@ var ActionUI = function (exports) {
   }(Model);
   /**
    * Store
+   * @version 20210305
    * @description Remote data store
    * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
    */
@@ -806,6 +808,11 @@ var ActionUI = function (exports) {
     }
 
     _createClass(Store, [{
+      key: "model",
+      value: function model(type) {
+        return this._cache[type];
+      }
+    }, {
       key: "data",
       value: function data(json) {
         return this.options.keys.data ? json[this.options.keys.data] : json;
@@ -872,7 +879,7 @@ var ActionUI = function (exports) {
       key: "url",
       value: function url(options) {
         var type = this.options.types[options.type] || options.type;
-        var url = this.options.baseUrl + '/' + type + (options.id ? '/' + options.id : '');
+        var url = this.options.baseUrl + '/' + type + '/' + (options.id ? options.id + '/' : '');
         var query = [];
 
         for (var i in options) {

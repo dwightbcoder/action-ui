@@ -3,6 +3,7 @@ import { Model } from './model.js'
 
 /**
  * Store
+ * @version 20210305
  * @description Remote data store
  * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
  */
@@ -56,6 +57,11 @@ class Store
         }
 
         this._cache = new Model(model)
+    }
+
+    model(type)
+    {
+        return this._cache[type]
     }
 
     data(json)
@@ -132,7 +138,7 @@ class Store
     url(options)
     {
         let type = this.options.types[options.type] || options.type
-        let url = this.options.baseUrl + '/' + type + (options.id ? '/' + options.id : '')
+        let url = this.options.baseUrl + '/' + type + '/' + (options.id ? options.id + '/' : '')
         let query = []
 
         for ( let i in options )

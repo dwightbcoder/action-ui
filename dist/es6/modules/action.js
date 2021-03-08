@@ -152,6 +152,7 @@ class Action
             
             if ( target && target.tagName != 'FORM')
             {
+                e.preventDefault()
                 var actionName = target.getAttribute('ui-action')
 
                 // Don't run the action if it's already running

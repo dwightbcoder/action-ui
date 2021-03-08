@@ -363,6 +363,7 @@ var ActionUI = (function (exports) {
                 
                 if ( target && target.tagName != 'FORM')
                 {
+                    e.preventDefault();
                     var actionName = target.getAttribute('ui-action');
 
                     // Don't run the action if it's already running
@@ -667,6 +668,7 @@ var ActionUI = (function (exports) {
 
     /**
      * Store
+     * @version 20210305
      * @description Remote data store
      * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
      */
@@ -720,6 +722,11 @@ var ActionUI = (function (exports) {
             }
 
             this._cache = new Model(model);
+        }
+
+        model(type)
+        {
+            return this._cache[type]
         }
 
         data(json)
@@ -796,7 +803,7 @@ var ActionUI = (function (exports) {
         url(options)
         {
             let type = this.options.types[options.type] || options.type;
-            let url = this.options.baseUrl + '/' + type + (options.id ? '/' + options.id : '');
+            let url = this.options.baseUrl + '/' + type + '/' + (options.id ? options.id + '/' : '');
             let query = [];
 
             for ( let i in options )
