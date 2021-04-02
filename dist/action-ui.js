@@ -188,6 +188,11 @@ var ActionUI = function (exports) {
         return this;
       }
     }, {
+      key: "triggerChanges",
+      value: function triggerChanges() {
+        return this._trigger();
+      }
+    }, {
       key: "_privatize",
       value: function _privatize() {
         for (var i in this) {
@@ -463,9 +468,9 @@ var ActionUI = function (exports) {
         var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
         return Action.create(Object.assign({
           name: element.getAttribute('ui-action') || null,
-          url: element.action || options.href || null,
+          url: element.action || element.href || options.href || null,
           request: {
-            method: element.method || null
+            method: element.method || options.method || null
           }
         }, options));
       } // Cache an action 
@@ -779,10 +784,13 @@ var ActionUI = function (exports) {
         'fetch': {
           'method': 'GET',
           'headers': new Headers({
-            'content-type': 'application/json'
+            'Content-Type': 'application/json'
           }),
           'mode': 'no-cors'
-        }
+        },
+        'triggerChangesOnError': true,
+        // Allows views to update contents on failed requests, especially useful for Fetch All requests which return no results or 404
+        'verbose': false
       };
       deepAssign(this.options, options || {});
       var model = new Model();
@@ -974,9 +982,12 @@ var ActionUI = function (exports) {
         });
         var url = this.url(query);
         return fetch(url, this.options.fetch).then(function (response) {
-          return response.json();
+          return response.ok ? response.json() : Promise.reject(response);
         }).then(function (json) {
           return _this6.sync(json);
+        }).catch(function (error) {
+          if (_this6.options.triggerChangesOnError) _this6.model(type).triggerChanges();
+          return Promise.reject(error);
         });
       })
     }, {
@@ -1014,7 +1025,7 @@ var ActionUI = function (exports) {
           'page[size]': size
         });
         return fetch(url, this.options.fetch).then(function (response) {
-          return response.json();
+          return response.ok ? response.json() : Promise.reject(response);
         }).then(function (json) {
           return cache[type][size][_page2].sync({
             links: json.links || {},
@@ -1066,13 +1077,20 @@ var ActionUI = function (exports) {
 
         var options = Object.create(this.options.fetch);
         options.method = 'DELETE';
-        type = type || this.type(data);
         var url = this.url({
           type: type,
           id: id
         });
-        return fetch(url, options).then(function () {
-          return delete _this10._cache[type][id];
+        if (this.options.verbose) console.info('Store.delete()', type, id, {
+          store: this,
+          url: url,
+          options: options
+        });
+        return fetch(url, options).then(function (response) {
+          return response.ok ? response.json() : Promise.reject(response);
+        }).then(function (json) {
+          delete _this10._cache[type][id];
+          return json;
         });
       }
     }]);
@@ -1089,20 +1107,41 @@ var ActionUI = function (exports) {
       _classCallCheck(this, StoreJsonApi);
 
       var _options = {
-        keys: {
+        'keys': {
           'data': 'data',
           'type': 'type',
           'id': 'id'
         },
-        query: {
+        'query': {
           'page[number]': 'page[number]',
           'page[size]': 'page[size]'
         },
-        per_page: 0
+        'per_page': 0,
+        'fetch': {
+          'headers': new Headers({
+            'Content-Type': 'application/vnd.api+json'
+          })
+        }
       };
       deepAssign(_options, options || {});
       return _super2.call(this, _options);
     }
+
+    _createClass(StoreJsonApi, [{
+      key: "sync",
+      value: function sync(json) {
+        if (json['included']) {
+          var _keyData = this.options.keys.data;
+          this.options.keys.data = 'included';
+
+          _get(_getPrototypeOf(StoreJsonApi.prototype), "sync", this).call(this, json);
+
+          this.options.keys.data = _keyData;
+        }
+
+        return _get(_getPrototypeOf(StoreJsonApi.prototype), "sync", this).call(this, json);
+      }
+    }]);
 
     return StoreJsonApi;
   }(Store);

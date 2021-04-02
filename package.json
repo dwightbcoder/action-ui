@@ -1,6 +1,6 @@
 {
   "name": "@dwightbcoder/action-ui",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "description": "Action UI is a Javascript framework to simplify connecting actions to user interface elements",
   "main": "dist/action-ui.min.js",
   "directories": {

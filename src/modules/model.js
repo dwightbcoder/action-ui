@@ -96,6 +96,11 @@ class Model
         return this
     }
 
+    triggerChanges()
+    {
+        return this._trigger()
+    }
+
     _privatize()
     {
         for ( let i in this )

@@ -170,6 +170,11 @@ var ActionUI = (function (exports) {
             return this
         }
 
+        triggerChanges()
+        {
+            return this._trigger()
+        }
+
         _privatize()
         {
             for ( let i in this )
@@ -442,8 +447,8 @@ var ActionUI = (function (exports) {
         {
             return Action.create(Object.assign({
                 name: element.getAttribute('ui-action') || null,
-                url: element.action || options.href || null,
-                request: { method: element.method || null }
+                url: element.action || element.href || options.href || null,
+                request: { method: element.method || options.method || null }
             }, options))
         }
 
@@ -691,9 +696,11 @@ var ActionUI = (function (exports) {
                 },
                 'fetch': {
                     'method': 'GET',
-                    'headers': new Headers({'content-type': 'application/json'}),
+                    'headers': new Headers({'Content-Type': 'application/json'}),
                     'mode': 'no-cors'
-                }
+                },
+                'triggerChangesOnError': true, // Allows views to update contents on failed requests, especially useful for Fetch All requests which return no results or 404
+                'verbose': false
             };
             deepAssign(this.options, options||{});
 
@@ -892,8 +899,13 @@ var ActionUI = (function (exports) {
             Object.assign(query, {type:type, id:id});
             let url = this.url(query);
             return fetch(url, this.options.fetch)
-                .then(response => response.json())
+                .then(response => response.ok ? response.json() : Promise.reject(response))
                 .then((json) => this.sync(json))
+                .catch((error) =>
+                {
+                    if (this.options.triggerChangesOnError) this.model(type).triggerChanges();
+                    return Promise.reject(error)
+                })
         }
 
         page(type, page = 1, size = 0)
@@ -923,7 +935,7 @@ var ActionUI = (function (exports) {
 
             let url = this.url({type:type, 'page[number]':page, 'page[size]':size});
             return fetch(url, this.options.fetch)
-                .then(response => response.json())
+                .then(response => response.ok ? response.json() : Promise.reject(response))
                 .then(json => cache[type][size][page].sync(
                 {
                     links: json.links || {},
@@ -963,11 +975,14 @@ var ActionUI = (function (exports) {
             let options = Object.create(this.options.fetch);
             options.method = 'DELETE';
 
-            type = type || this.type(data);
-            let url = this.url({type:type, id:id});
+            let url = this.url({ type: type, id: id });
+
+            if (this.options.verbose)
+                console.info('Store.delete()', type, id, { store: this, url: url, options: options });
 
             return fetch(url, options)
-                .then(() => delete this._cache[type][id])
+                .then(response => response.ok ? response.json() : Promise.reject(response))
+                .then(json => { delete this._cache[type][id]; return json } )
         }
     }
 
@@ -976,20 +991,36 @@ var ActionUI = (function (exports) {
         constructor(options)
         {
             let _options = {
-                keys: {
+                'keys': {
                     'data' : 'data',
                     'type' : 'type',
                     'id'   : 'id'
                 },
-                query: {
+                'query': {
                     'page[number]' : 'page[number]',
                     'page[size]'   : 'page[size]'
                 },
-                per_page: 0
+                'per_page': 0,
+                'fetch': {
+                    'headers': new Headers({ 'Content-Type': 'application/vnd.api+json' })
+                }
             };
 
             deepAssign(_options, options||{});
             super(_options);
+        }
+
+        sync(json)
+        {
+            if (json['included'])
+            {
+                let _keyData = this.options.keys.data;
+                this.options.keys.data = 'included';
+                super.sync(json);
+                this.options.keys.data = _keyData;
+            }
+
+            return super.sync(json)
         }
     }
 

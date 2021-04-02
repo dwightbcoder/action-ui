@@ -231,8 +231,8 @@ class Action
     {
         return Action.create(Object.assign({
             name: element.getAttribute('ui-action') || null,
-            url: element.action || options.href || null,
-            request: { method: element.method || null }
+            url: element.action || element.href || options.href || null,
+            request: { method: element.method || options.method || null }
         }, options))
     }
 
