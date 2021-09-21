@@ -54,14 +54,19 @@ class Store
         {
             for ( let i in this.options.types )
             {
-                model[this.options.types[i]] = new Model()
+				model[this.options.types[i]] = new Model({}, { model: model, property: this.options.types[i]})
             }
         }
 
-        this._cache = new Model(model)
+        this._cache = model
     }
 
-    model(type)
+    body(data)
+    {
+        return JSON.stringify(data)
+    }
+
+    model(type, id)
     {
         return this._cache[type]
     }
@@ -125,15 +130,15 @@ class Store
 
         if ( ! this._cache[type] )
         {
-            this._cache[type] = new Model()
+			this._cache[type] = new Model({}, {model:this._cache, property:type})
         }
 
         if ( ! this._cache[type][id] )
         {
-            this._cache[type][id] = new Model()
+			this._cache[type][id] = new Model({}, { model: this._cache[type], property: id })
         }
 
-        Util.deepAssign(this._cache[type][id], data)
+		this._cache[type][id].sync(data)
         return this._cache[type][id]
     }
 
@@ -291,10 +296,10 @@ class Store
     {
         let options = Object.create(this.options.fetch)
         options.method = 'PATCH'
+        options.body = this.body(data)
 
         type = type || this.type(data)
         let url = this.url({type:type, id:this.id(data)})
-
         return fetch(url, options)
             .then(response => response.json())
             .then((json) => this.sync(json))

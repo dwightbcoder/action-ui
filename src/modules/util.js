@@ -1,17 +1,32 @@
 /**
  * Utilities
  */
-function deepAssign(target, source)
+function deepAssign(target, source, dereference = false)
 {
+	if (dereference)
+	{
+		source = Object.assign({}, source)
+	}
+
     for (let i in source)
     {
         if (source.hasOwnProperty(i))
-        {
+		{
+			if (dereference && source[i] instanceof Object)
+			{
+				source[i] = Object.assign({}, source[i])
+			}
+
             if (target.hasOwnProperty(i))
-            {
+			{
+				if (dereference && target[i] instanceof Object)
+				{
+					target[i] = Object.assign({}, target[i])
+				}
+
                 if (target[i] instanceof Object && source[i] instanceof Object)
-                {
-                    deepAssign(target[i], source[i])
+				{
+					deepAssign(target[i], source[i])
                 }
                 else if (target[i] != source[i])
                 {
@@ -23,7 +38,14 @@ function deepAssign(target, source)
                 target[i] = source[i]
             }
         }
-    }
+	}
+
+	return target // For simpler dereference usage
+}
+
+function deepCopy(target, source)
+{
+	return deepAssign(target, source, true)
 }
 
 function requestFromElement(element)
@@ -61,4 +83,48 @@ function firstMatchingParentElement( element, selector )
     return firstMatchingParentElement(element.parentElement, selector)
 }
 
-export { deepAssign, requestFromElement, form, capitalize, camelCase, firstMatchingParentElement }
+function formToObject(form, data = {})
+{
+    data = Object.assign(Object.fromEntries((new FormData(form))), data)
+
+    Object.entries(data).map(entry =>
+    {
+        const keys = entry[0].split('[').map(key => key.replace(/]/g, ''))
+
+        if (keys.length > 1)
+        {
+            const obj = remapObjectKeys(keys, entry[1])
+            Util.deepAssign(data, obj)
+            delete data[entry[0]]
+        }
+
+        return entry
+    })
+
+    return data
+}
+
+function remapObjectKeys(keys, val, obj)
+{
+    const key = keys.pop()
+
+    if (!key)
+    {
+        return obj
+    }
+
+    let newObj = {}
+
+    if (!obj)
+    {
+        newObj[key] = val
+    }
+    else
+    {
+        newObj[key] = obj
+    }
+
+    return remapObjectKeys(keys, val, newObj)
+}
+
+export { deepAssign, requestFromElement, form, capitalize, camelCase, firstMatchingParentElement, formToObject }

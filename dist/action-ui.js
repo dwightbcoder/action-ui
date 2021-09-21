@@ -12,7 +12,7 @@ function _setPrototypeOf(o, p) { _setPrototypeOf = Object.setPrototypeOf || func
 
 function _createSuper(Derived) { var hasNativeReflectConstruct = _isNativeReflectConstruct(); return function _createSuperInternal() { var Super = _getPrototypeOf(Derived), result; if (hasNativeReflectConstruct) { var NewTarget = _getPrototypeOf(this).constructor; result = Reflect.construct(Super, arguments, NewTarget); } else { result = Super.apply(this, arguments); } return _possibleConstructorReturn(this, result); }; }
 
-function _possibleConstructorReturn(self, call) { if (call && (_typeof(call) === "object" || typeof call === "function")) { return call; } return _assertThisInitialized(self); }
+function _possibleConstructorReturn(self, call) { if (call && (_typeof(call) === "object" || typeof call === "function")) { return call; } else if (call !== void 0) { throw new TypeError("Derived constructors may only return object or undefined"); } return _assertThisInitialized(self); }
 
 function _assertThisInitialized(self) { if (self === void 0) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return self; }
 
@@ -33,9 +33,23 @@ var ActionUI = function (exports) {
    */
 
   function deepAssign(target, source) {
+    var dereference = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
+
+    if (dereference) {
+      source = Object.assign({}, source);
+    }
+
     for (var i in source) {
       if (source.hasOwnProperty(i)) {
+        if (dereference && source[i] instanceof Object) {
+          source[i] = Object.assign({}, source[i]);
+        }
+
         if (target.hasOwnProperty(i)) {
+          if (dereference && target[i] instanceof Object) {
+            target[i] = Object.assign({}, target[i]);
+          }
+
           if (target[i] instanceof Object && source[i] instanceof Object) {
             deepAssign(target[i], source[i]);
           } else if (target[i] != source[i]) {
@@ -46,6 +60,8 @@ var ActionUI = function (exports) {
         }
       }
     }
+
+    return target; // For simpler dereference usage
   }
 
   function requestFromElement(element) {
@@ -76,6 +92,43 @@ var ActionUI = function (exports) {
     return firstMatchingParentElement(element.parentElement, selector);
   }
 
+  function formToObject(form) {
+    var data = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+    data = Object.assign(Object.fromEntries(new FormData(form)), data);
+    Object.entries(data).map(function (entry) {
+      var keys = entry[0].split('[').map(function (key) {
+        return key.replace(/]/g, '');
+      });
+
+      if (keys.length > 1) {
+        var obj = remapObjectKeys(keys, entry[1]);
+        Util.deepAssign(data, obj);
+        delete data[entry[0]];
+      }
+
+      return entry;
+    });
+    return data;
+  }
+
+  function remapObjectKeys(keys, val, obj) {
+    var key = keys.pop();
+
+    if (!key) {
+      return obj;
+    }
+
+    var newObj = {};
+
+    if (!obj) {
+      newObj[key] = val;
+    } else {
+      newObj[key] = obj;
+    }
+
+    return remapObjectKeys(keys, val, newObj);
+  }
+
   var util = /*#__PURE__*/Object.freeze({
     __proto__: null,
     deepAssign: deepAssign,
@@ -83,7 +136,8 @@ var ActionUI = function (exports) {
     form: form,
     capitalize: capitalize,
     camelCase: camelCase,
-    firstMatchingParentElement: firstMatchingParentElement
+    firstMatchingParentElement: firstMatchingParentElement,
+    formToObject: formToObject
   });
   /**
    * Model
@@ -91,27 +145,49 @@ var ActionUI = function (exports) {
    */
 
   var Model = /*#__PURE__*/function () {
+    //static __instance = 0
     function Model() {
       var data = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
+      var parent = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : null;
 
       _classCallCheck(this, Model);
 
+      //this._instance = ++Model.__instance
       this._options = {
         triggerDelay: 10
       };
       this._changes = {};
       this._watchers = [];
       this._timer = null;
+      this._parent = parent; //{ model: null, property: null }
 
       this._privatize();
 
       deepAssign(this, data); // Pre-init required by IE11
 
+      this.sync(data);
+
       var proxySet = function proxySet(target, prop, value) {
         var originalValue = target[prop];
 
-        if (window.Reflect && window.Reflect.set) {
+        if (target[prop] && target[prop] instanceof Model) {
+          target[prop].sync(value);
+        } else if (window.Reflect && window.Reflect.set) {
+          if (value instanceof Object && !(value instanceof Model) && prop[0] != '_') {
+            // Convert child objects to models with this target as parent
+            value = new Model(value, {
+              model: target,
+              property: prop
+            });
+          }
+
           Reflect.set(target, prop, value);
+        } else {
+          throw 'Missing Model dependency: Reflect.set()';
+        }
+
+        if (prop[0] == '_') {
+          return true; // Don't trigger changes for non-enumerable/private properties
         }
 
         target._change(prop, value, originalValue);
@@ -169,7 +245,8 @@ var ActionUI = function (exports) {
     }, {
       key: "sync",
       value: function sync(data) {
-        data = Object.assign({}, data);
+        data = deepAssign({}, data, true); // Copy and dereference
+
         deepAssign(this, data);
         return this;
       } // Add watcher callback
@@ -190,7 +267,7 @@ var ActionUI = function (exports) {
     }, {
       key: "triggerChanges",
       value: function triggerChanges() {
-        return this._trigger();
+        return this._trigger(true);
       }
     }, {
       key: "_privatize",
@@ -207,10 +284,11 @@ var ActionUI = function (exports) {
     }, {
       key: "_trigger",
       value: function _trigger() {
+        var force = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : false;
         window.clearTimeout(this._timer);
         this._timer = null;
 
-        if (Object.keys(this._changes).length > 0) {
+        if (force || Object.keys(this._changes).length > 0) {
           var callbacks = this._watchers;
 
           for (var i in callbacks) {
@@ -236,6 +314,14 @@ var ActionUI = function (exports) {
           this._timer = window.setTimeout(function () {
             return _this._trigger();
           }, this._options.triggerDelay);
+        }
+
+        if (this._parent != null) {
+          var thisCopy = {};
+          thisCopy = deepAssign({}, this, true);
+          thisCopy[prop] = originalValue;
+
+          this._parent.model._change(this._parent.property, this, thisCopy);
         }
       }
     }]);
@@ -334,6 +420,8 @@ var ActionUI = function (exports) {
     }, {
       key: "syncModel",
       value: function syncModel(data) {
+        data = deepAssign({}, data, true); // Deep copy and dereference data
+
         if (_options.verbose) console.info('Action.syncModel()', this.name, {
           action: this,
           data: data
@@ -470,7 +558,7 @@ var ActionUI = function (exports) {
           name: element.getAttribute('ui-action') || null,
           url: element.action || element.href || options.href || null,
           request: {
-            method: element.method || options.method || null
+            method: element.method || options.method || 'GET'
           }
         }, options));
       } // Cache an action 
@@ -496,7 +584,7 @@ var ActionUI = function (exports) {
         var form$1 = form(target);
 
         if (form$1) {
-          data = Object.assign(Object.fromEntries(new FormData(form$1)), data);
+          data = formToObject(form$1, data);
         }
 
         return data;
@@ -808,16 +896,24 @@ var ActionUI = function (exports) {
 
       if (this.options.types instanceof Object) {
         for (var _i in this.options.types) {
-          model[this.options.types[_i]] = new Model();
+          model[this.options.types[_i]] = new Model({}, {
+            model: model,
+            property: this.options.types[_i]
+          });
         }
       }
 
-      this._cache = new Model(model);
+      this._cache = model;
     }
 
     _createClass(Store, [{
+      key: "body",
+      value: function body(data) {
+        return JSON.stringify(data);
+      }
+    }, {
       key: "model",
-      value: function model(type) {
+      value: function model(type, id) {
         return this._cache[type];
       }
     }, {
@@ -873,14 +969,21 @@ var ActionUI = function (exports) {
         var id = this.id(data);
 
         if (!this._cache[type]) {
-          this._cache[type] = new Model();
+          this._cache[type] = new Model({}, {
+            model: this._cache,
+            property: type
+          });
         }
 
         if (!this._cache[type][id]) {
-          this._cache[type][id] = new Model();
+          this._cache[type][id] = new Model({}, {
+            model: this._cache[type],
+            property: id
+          });
         }
 
-        deepAssign(this._cache[type][id], data);
+        this._cache[type][id].sync(data);
+
         return this._cache[type][id];
       }
     }, {
@@ -1059,6 +1162,7 @@ var ActionUI = function (exports) {
 
         var options = Object.create(this.options.fetch);
         options.method = 'PATCH';
+        options.body = this.body(data);
         type = type || this.type(data);
         var url = this.url({
           type: type,
@@ -1140,6 +1244,13 @@ var ActionUI = function (exports) {
         }
 
         return _get(_getPrototypeOf(StoreJsonApi.prototype), "sync", this).call(this, json);
+      }
+    }, {
+      key: "body",
+      value: function body(data) {
+        return JSON.stringify({
+          data: data
+        });
       }
     }]);
 

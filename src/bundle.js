@@ -4,17 +4,32 @@ var ActionUI = (function (exports) {
     /**
      * Utilities
      */
-    function deepAssign(target, source)
+    function deepAssign(target, source, dereference = false)
     {
+    	if (dereference)
+    	{
+    		source = Object.assign({}, source);
+    	}
+
         for (let i in source)
         {
             if (source.hasOwnProperty(i))
-            {
+    		{
+    			if (dereference && source[i] instanceof Object)
+    			{
+    				source[i] = Object.assign({}, source[i]);
+    			}
+
                 if (target.hasOwnProperty(i))
-                {
+    			{
+    				if (dereference && target[i] instanceof Object)
+    				{
+    					target[i] = Object.assign({}, target[i]);
+    				}
+
                     if (target[i] instanceof Object && source[i] instanceof Object)
-                    {
-                        deepAssign(target[i], source[i]);
+    				{
+    					deepAssign(target[i], source[i]);
                     }
                     else if (target[i] != source[i])
                     {
@@ -26,7 +41,9 @@ var ActionUI = (function (exports) {
                     target[i] = source[i];
                 }
             }
-        }
+    	}
+
+    	return target // For simpler dereference usage
     }
 
     function requestFromElement(element)
@@ -64,6 +81,50 @@ var ActionUI = (function (exports) {
         return firstMatchingParentElement(element.parentElement, selector)
     }
 
+    function formToObject(form, data = {})
+    {
+        data = Object.assign(Object.fromEntries((new FormData(form))), data);
+
+        Object.entries(data).map(entry =>
+        {
+            const keys = entry[0].split('[').map(key => key.replace(/]/g, ''));
+
+            if (keys.length > 1)
+            {
+                const obj = remapObjectKeys(keys, entry[1]);
+                Util.deepAssign(data, obj);
+                delete data[entry[0]];
+            }
+
+            return entry
+        });
+
+        return data
+    }
+
+    function remapObjectKeys(keys, val, obj)
+    {
+        const key = keys.pop();
+
+        if (!key)
+        {
+            return obj
+        }
+
+        let newObj = {};
+
+        if (!obj)
+        {
+            newObj[key] = val;
+        }
+        else
+        {
+            newObj[key] = obj;
+        }
+
+        return remapObjectKeys(keys, val, newObj)
+    }
+
     var util = /*#__PURE__*/Object.freeze({
         __proto__: null,
         deepAssign: deepAssign,
@@ -71,7 +132,8 @@ var ActionUI = (function (exports) {
         form: form,
         capitalize: capitalize,
         camelCase: camelCase,
-        firstMatchingParentElement: firstMatchingParentElement
+        firstMatchingParentElement: firstMatchingParentElement,
+        formToObject: formToObject
     });
 
     /**
@@ -81,24 +143,50 @@ var ActionUI = (function (exports) {
 
     class Model
     {
-        constructor(data = {})
-        {
-            this._options = { triggerDelay: 10 };
+    	//static __instance = 0
+
+    	constructor(data = {}, parent = null)
+    	{
+    		//this._instance = ++Model.__instance
+    		this._options = { triggerDelay: 10 };
             this._changes = {};
             this._watchers = [];
-            this._timer = null;
+    		this._timer = null;
+    		this._parent = parent; //{ model: null, property: null }
             this._privatize();
 
             deepAssign(this, data); // Pre-init required by IE11
+    		this.sync(data);
 
             let proxySet = (target, prop, value) =>
-            {
-                let originalValue = target[prop];
-                if ( window.Reflect && window.Reflect.set )
-                {
-                    Reflect.set(target, prop, value);
-                }
-                target._change(prop, value, originalValue);
+    		{
+    			let originalValue = target[prop];
+
+    			if (target[prop] && target[prop] instanceof Model)
+    			{
+    				target[prop].sync(value);
+    			}
+    			else if (window.Reflect && window.Reflect.set)
+    			{
+    				if (value instanceof Object && !(value instanceof Model) && prop[0] != '_')
+    				{
+    					// Convert child objects to models with this target as parent
+    					value = new Model(value, { model: target, property: prop });
+    				}
+
+    				Reflect.set(target, prop, value);
+    			}
+    			else
+    			{
+    				throw 'Missing Model dependency: Reflect.set()' 
+    			}
+    			
+    			if (prop[0] == '_')
+    			{
+    				return true // Don't trigger changes for non-enumerable/private properties
+    			}
+
+    			target._change(prop, value, originalValue);
                 return true
             };
 
@@ -152,7 +240,7 @@ var ActionUI = (function (exports) {
         // Sync data object to model
         sync(data)
         {
-            data = Object.assign({}, data);
+    		data = deepAssign({}, data, true); // Copy and dereference
             deepAssign(this, data);
             return this
         }
@@ -172,7 +260,7 @@ var ActionUI = (function (exports) {
 
         triggerChanges()
         {
-            return this._trigger()
+            return this._trigger(true)
         }
 
         _privatize()
@@ -187,16 +275,16 @@ var ActionUI = (function (exports) {
         }
 
         // Trigger all watcher callbacks
-        _trigger()
-        {
+        _trigger(force = false)
+    	{
             window.clearTimeout(this._timer);
             this._timer = null;
 
-            if (Object.keys(this._changes).length > 0)
-            {
+            if (force || Object.keys(this._changes).length > 0)
+    		{
                 let callbacks = this._watchers;
                 for(let i in callbacks)
-                {
+    			{
                     callbacks[i].call(this, this._changes);
                 }
 
@@ -207,13 +295,22 @@ var ActionUI = (function (exports) {
 
         // Log property change
         _change(prop, value, originalValue)
-        {
+    	{
             this._changes[prop] = {value:value, originalValue:originalValue};
 
             if (! this._timer)
             {
                 this._timer = window.setTimeout(() => this._trigger(), this._options.triggerDelay);
-            }
+    		}
+
+    		if (this._parent != null)
+    		{
+    			let thisCopy = {};
+    			thisCopy = deepAssign({}, this, true);
+    			thisCopy[prop] = originalValue;
+
+    			this._parent.model._change(this._parent.property, this, thisCopy);
+    		}
         }
     }
 
@@ -223,298 +320,299 @@ var ActionUI = (function (exports) {
      */
     class Action
     {
-        constructor(name, handler, model)
-        {
-            this.name = name;
-            this.handler = handler || ((resolve, reject, data) => resolve(data));
-            this.model = model ? model : new Model();
-            this.running = false;
+    	constructor(name, handler, model)
+    	{
+    		this.name = name;
+    		this.handler = handler || ((resolve, reject, data) => resolve(data));
+    		this.model = model ? model : new Model();
+    		this.running = false;
 
-            if ( _options.autoCache )
-            {
-                Action.cache(this);
-            }
-        }
+    		if ( _options.autoCache )
+    		{
+    			Action.cache(this);
+    		}
+    	}
 
-        // trigger before event and run the handler as a promise 
-        run(target, data = {})
-        {
-            if (_options.verbose) console.info('Action.run()', this.name, {action:this, target:target, data:data});
+    	// trigger before event and run the handler as a promise 
+    	run(target, data = {})
+    	{
+    		if (_options.verbose) console.info('Action.run()', this.name, {action:this, target:target, data:data});
 
-            this.running = true;
-            target = target || document.body;
-            //target.setAttribute('disabled', 'disabled')
-            data = Object.assign(data, Action.data(target));
-            this.before(target, data);
+    		this.running = true;
+    		target = target || document.body;
+    		//target.setAttribute('disabled', 'disabled')
+    		data = Object.assign(data, Action.data(target));
+    		this.before(target, data);
 
-            var promise = null;
+    		var promise = null;
 
-            if (this.handler instanceof Function)
-            {
-                promise = (new Promise((resolve, reject) => this.handler(resolve, reject, data)));
-            }
-            else if (this.handler instanceof Request)
-            {
-                // If there is data to send, recreate the request with the data
-                if (Object.keys(data).length > 0)
-                {
-                    let options = {}; for (let i in this.handler) options[i] = this.handler[i];
+    		if (this.handler instanceof Function)
+    		{
+    			promise = (new Promise((resolve, reject) => this.handler(resolve, reject, data)));
+    		}
+    		else if (this.handler instanceof Request)
+    		{
+    			// If there is data to send, recreate the request with the data
+    			if (Object.keys(data).length > 0)
+    			{
+    				let options = {}; for (let i in this.handler) options[i] = this.handler[i];
 
-                    if (options.method == 'POST')
-                    {
-                        if ( target.attributes.enctype && target.attributes.enctype.value == 'application/json' )
-                        {
-                            options.body = JSON.stringify(data);
-                        }
-                        else
-                        {
-                            let formData = new FormData();
-                            for ( let key in data ) formData.append(key, data[key]);
-                            options.body = formData;
-                        }
-                    }
-                    else if (options.method == 'GET')
-                    {
-                        // Append query string to URL with ?/& first as needed
-                        options.url += (options.url.indexOf('?')<0?'?':'&') + Object.keys(data).map(key => key + '=' + data[key]).join('&');
-                    }
+    				if (options.method == 'POST')
+    				{
+    					if ( target.attributes.enctype && target.attributes.enctype.value == 'application/json' )
+    					{
+    						options.body = JSON.stringify(data);
+    					}
+    					else
+    					{
+    						let formData = new FormData();
+    						for ( let key in data ) formData.append(key, data[key]);
+    						options.body = formData;
+    					}
+    				}
+    				else if (options.method == 'GET')
+    				{
+    					// Append query string to URL with ?/& first as needed
+    					options.url += (options.url.indexOf('?') < 0 ? '?' : '&') + Object.keys(data).map(key => key + '=' + data[key]).join('&');
+    				}
 
-                    this.handler = new Request(options.url, options);
-                }
+    				this.handler = new Request(options.url, options);
+    			}
 
-                promise = fetch(this.handler)
-                    .then(response => response.json());
-            }
+    			promise = fetch(this.handler)
+    				.then(response => response.json());
+    		}
 
-            return promise
-                .then(
-                    (result) => this.after(target, true, result, data),
-                    (result) => this.after(target, false, result, data)
-                )
-        }
+    		return promise
+    			.then(
+    				(result) => this.after(target, true, result, data),
+    				(result) => this.after(target, false, result, data)
+    			)
+    	}
 
-        syncModel(data)
-        {
-            if (_options.verbose) console.info('Action.syncModel()', this.name, {action:this, data:data});
+    	syncModel(data)
+    	{
+    		data = deepAssign({}, data, true); // Deep copy and dereference data
+    		if (_options.verbose) console.info('Action.syncModel()', this.name, { action: this, data: data });
 
-            if (!(data instanceof Object))
-            {
-                data = {result:data};
-            }
+    		if (!(data instanceof Object))
+    		{
+    			data = { result: data };
+    		}
 
-            if ( this.model.sync && this.model.sync instanceof Function )
-            {
-                this.model.sync(data);
-            }
-            else if ( this.model instanceof Object )
-            {
-                deepAssign(this.model, data);
-            }
+    		if ( this.model.sync && this.model.sync instanceof Function )
+    		{
+    			this.model.sync(data);
+    		}
+    		else if ( this.model instanceof Object )
+    		{
+    			deepAssign(this.model, data);
+    		}
 
-            return data
-        }
+    		return data
+    	}
 
-        before(target, data)
-        {
-            if (_options.verbose) console.info('Action.before()', this.name, {action:this, target:target, data:data});
+    	before(target, data)
+    	{
+    		if (_options.verbose) console.info('Action.before()', this.name, { action: this, target: target, data: data });
 
-            Action.setCssClass(target, _options.cssClass.loading);
-            Action.reflectCssClass(this.name, _options.cssClass.loading);
+    		Action.setCssClass(target, _options.cssClass.loading);
+    		Action.reflectCssClass(this.name, _options.cssClass.loading);
 
-            Object.assign(_options.eventBefore.detail, {
-                name: this.name,
-                data: data,
-                model: this.model
-            });
+    		Object.assign(_options.eventBefore.detail, {
+    			name: this.name,
+    			data: data,
+    			model: this.model
+    		});
 
-            target.dispatchEvent(_options.eventBefore);
-        }
+    		target.dispatchEvent(_options.eventBefore);
+    	}
 
-        after(target, success, result, data)
-        {
-            if (_options.verbose) console.info('Action.after()', this.name, {action:this, target:target, data:data, success:success, result:result});
+    	after(target, success, result, data)
+    	{
+    		if (_options.verbose) console.info('Action.after()', this.name, { action: this, target: target, data: data, success: success, result: result });
 
-            this.running = false;
-            //target.removeAttribute('disabled')
-            var cssClass = success ? _options.cssClass.success : _options.cssClass.fail;
-            Action.setCssClass(target, cssClass);
-            Action.reflectCssClass(this.name, cssClass);
-            
-            if ( result != undefined )
-            {
-                this.syncModel(result);
-            }
-            
-            Object.assign(_options.eventAfter.detail, {
-                name: this.name,
-                success: success,
-                data: data,
-                model: this.model
-            });
+    		this.running = false;
+    		//target.removeAttribute('disabled')
+    		var cssClass = success ? _options.cssClass.success : _options.cssClass.fail;
+    		Action.setCssClass(target, cssClass);
+    		Action.reflectCssClass(this.name, cssClass);
 
-            target.dispatchEvent(_options.eventAfter);
-            return result
-        }
+    		if ( result != undefined )
+    		{
+    			this.syncModel(result);
+    		}
 
-        // #region Static methods
-        
-        // Initialize the action cache and top-level event listener (only once)
-        static init()
-        {
-            // General elements
-            document.addEventListener('click', e =>
-            {
-                let target = firstMatchingParentElement(e.target, '[ui-action]');
-                
-                if ( target && target.tagName != 'FORM')
-                {
-                    e.preventDefault();
-                    var actionName = target.getAttribute('ui-action');
+    		Object.assign(_options.eventAfter.detail, {
+    			name: this.name,
+    			success: success,
+    			data: data,
+    			model: this.model
+    		});
 
-                    // Don't run the action if it's already running
-                    if (actionName in _cache)
-                    {
-                        if (_cache[actionName].running == false)
-                        {
-                            _cache[actionName].run(target);
-                        }
-                    }
-                    else if ( _options.autoCreate )
-                    {
-                        // Auto create and run action
-                        var action = Action.createFromElement(target);
-                        Action.cache(action);
-                        action.run(target);
-                    }
-                    else
-                    {
-                        throw new Error('Action not found: ' + actionName)
-                    }
-                }
-            });
+    		target.dispatchEvent(_options.eventAfter);
+    		return result
+    	}
 
-            // Form submission
-            document.addEventListener('submit', e =>
-            {
-                if (e.target.matches('form[ui-action]'))
-                {
-                    e.preventDefault();
-                    var actionName = e.target.getAttribute('ui-action');
+    	// #region Static methods
 
-                    // Don't run the action if it's already running
-                    if (actionName in _cache)
-                    {
-                        if (_cache[actionName].running == false)
-                        {
-                            _cache[actionName].run(e.target);
-                        }
-                    }
-                    else if ( _options.autoCreate )
-                    {
-                        // Auto create and run action
-                        var action = Action.createFromElement(e.target);
-                        Action.cache(action);
-                        action.run(e.target);
-                    }
-                    else
-                    {
-                        throw new Error('Action not found: ' + actionName)
-                    }
-                }
-            });
-        }
+    	// Initialize the action cache and top-level event listener (only once)
+    	static init()
+    	{
+    		// General elements
+    		document.addEventListener('click', e =>
+    		{
+    			let target = firstMatchingParentElement(e.target, '[ui-action]');
 
-        static create(options)
-        {
-            if ('name' in options === false) throw 'No action name specfied'
+    			if ( target && target.tagName != 'FORM' )
+    			{
+    				e.preventDefault();
+    				var actionName = target.getAttribute('ui-action');
 
-            if ('handler' in options === false)
-            {
-                if ('url' in options === true && options.url)
-                {
-                    options.handler = new Request(options.url, options.request || {});
-                }
-                else
-                {
-                    options.handler = null;
-                }
-            }
+    				// Don't run the action if it's already running
+    				if (actionName in _cache)
+    				{
+    					if (_cache[actionName].running == false)
+    					{
+    						_cache[actionName].run(target);
+    					}
+    				}
+    				else if ( _options.autoCreate )
+    				{
+    					// Auto create and run action
+    					var action = Action.createFromElement(target);
+    					Action.cache(action);
+    					action.run(target);
+    				}
+    				else
+    				{
+    					throw new Error('Action not found: ' + actionName)
+    				}
+    			}
+    		});
 
-            return new Action(options.name, options.handler, options.model)
-        }
+    		// Form submission
+    		document.addEventListener('submit', e =>
+    		{
+    			if (e.target.matches('form[ui-action]'))
+    			{
+    				e.preventDefault();
+    				var actionName = e.target.getAttribute('ui-action');
 
-        static createFromElement(element, options = {})
-        {
-            return Action.create(Object.assign({
-                name: element.getAttribute('ui-action') || null,
-                url: element.action || element.href || options.href || null,
-                request: { method: element.method || options.method || null }
-            }, options))
-        }
+    				// Don't run the action if it's already running
+    				if (actionName in _cache)
+    				{
+    					if (_cache[actionName].running == false)
+    					{
+    						_cache[actionName].run(e.target);
+    					}
+    				}
+    				else if ( _options.autoCreate )
+    				{
+    					// Auto create and run action
+    					var action = Action.createFromElement(e.target);
+    					Action.cache(action);
+    					action.run(e.target);
+    				}
+    				else
+    				{
+    					throw new Error('Action not found: ' + actionName)
+    				}
+    			}
+    		});
+    	}
 
-        // Cache an action 
-        static cache(action)
-        {
-            if ('string' == typeof action)
-            {
-                return _cache[action]
-            }
+    	static create(options)
+    	{
+    		if ('name' in options === false) throw 'No action name specfied'
 
-            if (action.name in _cache)
-            {
-                return Action
-                //throw 'Action name already exists: "' + action.name + '"'
-            }
+    		if ('handler' in options === false)
+    		{
+    			if ('url' in options === true && options.url)
+    			{
+    				options.handler = new Request(options.url, options.request || {});
+    			}
+    			else
+    			{
+    				options.handler = null;
+    			}
+    		}
 
-            _cache[action.name] = action;
-            return Action
-        }
+    		return new Action(options.name, options.handler, options.model)
+    	}
 
-        static data(target)
-        {
-            var data = target.dataset || {};
-            var form$1 = form(target);
+    	static createFromElement(element, options = {})
+    	{
+    		return Action.create(Object.assign({
+    			name: element.getAttribute('ui-action') || null,
+    			url: element.action || element.href || options.href || null,
+    			request: { method: element.method || options.method || 'GET' }
+    		}, options))
+    	}
 
-            if ( form$1 )
-            {
-                data = Object.assign(Object.fromEntries((new FormData(form$1))), data);
-            }
+    	// Cache an action 
+    	static cache(action)
+    	{
+    		if ('string' == typeof action)
+    		{
+    			return _cache[action]
+    		}
 
-            return data
-        }
+    		if (action.name in _cache)
+    		{
+    			return Action
+    			//throw 'Action name already exists: "' + action.name + '"'
+    		}
 
-        static get(name)
-        {
-            return _cache[name]
-        }
+    		_cache[action.name] = action;
+    		return Action
+    	}
 
-        static setCssClass(target, cssClass)
-        {
-            for (var i in _options.cssClass) target.classList.remove(_options.cssClass[i]);
-            target.classList.add(cssClass);
-        }
+    	static data(target)
+    	{
+    		var data = target.dataset || {};
+    		var form$1 = form(target);
 
-        // Propagate class to all reflectors (ui-state and form submit buttons)
-        static reflectCssClass(name, cssClass)
-        {
-            document.querySelectorAll('form[ui-action="'+name+'"] [type="submit"], form[ui-action="'+name+'"] button:not([type]), [ui-state="'+name+'"]')
-                .forEach((el) => Action.setCssClass(el, cssClass));
-        }
-        
-        static get options() { return _options }
-        static set options(value) { deepAssign(_options, value); }
+    		if ( form$1 )
+    		{
+                data = formToObject(form$1, data);
+    		}
 
-        // #endregion
+    		return data
+    	}
+
+    	static get(name)
+    	{
+    		return _cache[name]
+    	}
+
+    	static setCssClass(target, cssClass)
+    	{
+    		for (var i in _options.cssClass) target.classList.remove(_options.cssClass[i]);
+    		target.classList.add(cssClass);
+    	}
+
+    	// Propagate class to all reflectors (ui-state and form submit buttons)
+    	static reflectCssClass(name, cssClass)
+    	{
+    		document.querySelectorAll('form[ui-action="'+name+'"] [type="submit"], form[ui-action="'+name+'"] button:not([type]), [ui-state="'+name+'"]')
+    			.forEach((el) => Action.setCssClass(el, cssClass));
+    	}
+
+    	static get options() { return _options }
+    	static set options(value) { deepAssign(_options, value); }
+
+    	// #endregion
     }
 
     let _cache = {};
     let _options = {
-        verbose: false,
-        autoCreate: true,
-        autoCache: true,
-        cssClass: { 'loading': 'loading', 'success': 'success', 'fail': 'fail' },
-        eventBefore: new CustomEvent('action.before', { bubbles: true, detail: { type: 'before', name: null, data: null, model: null } }),
-        eventAfter: new CustomEvent('action.after' , { bubbles: true, detail: { type: 'after' , name: null, data: null, success: null, model: null } })
+    	verbose: false,
+    	autoCreate: true,
+    	autoCache: true,
+    	cssClass: { 'loading': 'loading', 'success': 'success', 'fail': 'fail' },
+    	eventBefore: new CustomEvent('action.before', { bubbles: true, detail: { type: 'before', name: null, data: null, model: null } }),
+    	eventAfter: new CustomEvent('action.after', { bubbles: true, detail: { type: 'after', name: null, data: null, success: null, model: null } })
     };
 
     Action.init();
@@ -724,14 +822,19 @@ var ActionUI = (function (exports) {
             {
                 for ( let i in this.options.types )
                 {
-                    model[this.options.types[i]] = new Model();
+    				model[this.options.types[i]] = new Model({}, { model: model, property: this.options.types[i]});
                 }
             }
 
-            this._cache = new Model(model);
+            this._cache = model;
         }
 
-        model(type)
+        body(data)
+        {
+            return JSON.stringify(data)
+        }
+
+        model(type, id)
         {
             return this._cache[type]
         }
@@ -795,15 +898,15 @@ var ActionUI = (function (exports) {
 
             if ( ! this._cache[type] )
             {
-                this._cache[type] = new Model();
+    			this._cache[type] = new Model({}, {model:this._cache, property:type});
             }
 
             if ( ! this._cache[type][id] )
             {
-                this._cache[type][id] = new Model();
+    			this._cache[type][id] = new Model({}, { model: this._cache[type], property: id });
             }
 
-            deepAssign(this._cache[type][id], data);
+    		this._cache[type][id].sync(data);
             return this._cache[type][id]
         }
 
@@ -961,10 +1064,10 @@ var ActionUI = (function (exports) {
         {
             let options = Object.create(this.options.fetch);
             options.method = 'PATCH';
+            options.body = this.body(data);
 
             type = type || this.type(data);
             let url = this.url({type:type, id:this.id(data)});
-
             return fetch(url, options)
                 .then(response => response.json())
                 .then((json) => this.sync(json))
@@ -1022,6 +1125,12 @@ var ActionUI = (function (exports) {
 
             return super.sync(json)
         }
+
+        body(data)
+        {
+            return JSON.stringify({data})
+        }
+
     }
 
     class StoreWordpress extends Store

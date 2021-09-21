@@ -37,6 +37,12 @@ class StoreJsonApi extends Store
 
         return super.sync(json)
     }
+
+    body(data)
+    {
+        return JSON.stringify({data})
+    }
+
 }
 
 export { StoreJsonApi }

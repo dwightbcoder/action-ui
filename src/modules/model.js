@@ -7,24 +7,50 @@ import * as Util from "./util.js";
 
 class Model
 {
-    constructor(data = {})
-    {
-        this._options = { triggerDelay: 10 }
+	//static __instance = 0
+
+	constructor(data = {}, parent = null)
+	{
+		//this._instance = ++Model.__instance
+		this._options = { triggerDelay: 10 }
         this._changes = {}
         this._watchers = []
-        this._timer = null
+		this._timer = null
+		this._parent = parent //{ model: null, property: null }
         this._privatize()
 
         Util.deepAssign(this, data) // Pre-init required by IE11
+		this.sync(data)
 
         let proxySet = (target, prop, value) =>
-        {
-            let originalValue = target[prop]
-            if ( window.Reflect && window.Reflect.set )
-            {
-                Reflect.set(target, prop, value)
-            }
-            target._change(prop, value, originalValue)
+		{
+			let originalValue = target[prop]
+
+			if (target[prop] && target[prop] instanceof Model)
+			{
+				target[prop].sync(value)
+			}
+			else if (window.Reflect && window.Reflect.set)
+			{
+				if (value instanceof Object && !(value instanceof Model) && prop[0] != '_')
+				{
+					// Convert child objects to models with this target as parent
+					value = new Model(value, { model: target, property: prop })
+				}
+
+				Reflect.set(target, prop, value)
+			}
+			else
+			{
+				throw 'Missing Model dependency: Reflect.set()' 
+			}
+			
+			if (prop[0] == '_')
+			{
+				return true // Don't trigger changes for non-enumerable/private properties
+			}
+
+			target._change(prop, value, originalValue)
             return true
         }
 
@@ -78,7 +104,7 @@ class Model
     // Sync data object to model
     sync(data)
     {
-        data = Object.assign({}, data)
+		data = Util.deepAssign({}, data, true) // Copy and dereference
         Util.deepAssign(this, data)
         return this
     }
@@ -98,7 +124,7 @@ class Model
 
     triggerChanges()
     {
-        return this._trigger()
+        return this._trigger(true)
     }
 
     _privatize()
@@ -113,16 +139,16 @@ class Model
     }
 
     // Trigger all watcher callbacks
-    _trigger()
-    {
+    _trigger(force = false)
+	{
         window.clearTimeout(this._timer)
         this._timer = null
 
-        if (Object.keys(this._changes).length > 0)
-        {
+        if (force || Object.keys(this._changes).length > 0)
+		{
             let callbacks = this._watchers
             for(let i in callbacks)
-            {
+			{
                 callbacks[i].call(this, this._changes)
             }
 
@@ -133,13 +159,22 @@ class Model
 
     // Log property change
     _change(prop, value, originalValue)
-    {
+	{
         this._changes[prop] = {value:value, originalValue:originalValue}
 
         if (! this._timer)
         {
             this._timer = window.setTimeout(() => this._trigger(), this._options.triggerDelay)
-        }
+		}
+
+		if (this._parent != null)
+		{
+			let thisCopy = {}
+			thisCopy = Util.deepAssign({}, this, true)
+			thisCopy[prop] = originalValue
+
+			this._parent.model._change(this._parent.property, this, thisCopy)
+		}
     }
 }
 
