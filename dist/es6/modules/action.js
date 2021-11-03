@@ -153,7 +153,8 @@ class Action
 
 			if ( target && target.tagName != 'FORM' )
 			{
-				e.preventDefault()
+				if (!(target.tagName == 'INPUT' && target.type == 'checkbox'))
+					e.preventDefault()
 				var actionName = target.getAttribute('ui-action')
 
 				// Don't run the action if it's already running
