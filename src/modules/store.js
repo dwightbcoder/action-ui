@@ -1,9 +1,10 @@
 import * as Util from './util.js'
 import { Model } from './model.js'
+import { View } from './view.js'
 
 /**
  * Store
- * @version 20210305
+ * @version 20211104
  * @description Remote data store
  * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
  */
@@ -30,12 +31,18 @@ class Store
                 'mode': 'no-cors'
             },
             'triggerChangesOnError': true, // Allows views to update contents on failed requests, especially useful for Fetch All requests which return no results or 404
-            'verbose': false
+            'verbose': false,
+			'viewClass': null,
+			'viewMap': {}
         }
         Util.deepAssign(this.options, options||{})
+		if (this.options.viewClass == null)
+		{
+			this.options.viewClass = View
+		}
 
-        let model = new Model()
-        model._paging = {}
+        this._model = new Model()
+        this._model._paging = {}
         
         // Accept an array of store keys
         if ( this.options.types instanceof Array ) 
@@ -54,11 +61,11 @@ class Store
         {
             for ( let i in this.options.types )
             {
-				model[this.options.types[i]] = new Model({}, { model: model, property: this.options.types[i]})
+				this.modelCreate(this.options.types[i])
             }
         }
 
-        this._cache = model
+		Store.cache(this)
     }
 
     body(data)
@@ -68,8 +75,28 @@ class Store
 
     model(type, id)
     {
-        return this._cache[type]
+        return this._model[type]
     }
+
+    modelCreate(type, id = null)
+	{
+		if (!('string' == typeof type))
+			throw new Error('Store: Cannot create model without `type`')
+
+		if (!this._model[type])
+		{
+			this._model[type] = new Model({}, { model: this._model, property: type })
+			if (this.options.viewMap.hasOwnProperty(type))
+			{
+				new this.options.viewClass(this.options.viewMap[type], this._model[type])
+			}
+		}
+
+		if (id != null && 'string' == typeof id && !this._model[type][id])
+		{
+			this._model[type][id] = new Model({}, { model: this._model[type], property: id })
+		}
+	}
 
     data(json)
     {
@@ -128,18 +155,18 @@ class Store
         let type = this.type(data)
         let id = this.id(data)
 
-        if ( ! this._cache[type] )
+        if ( ! this._model[type] )
         {
-			this._cache[type] = new Model({}, {model:this._cache, property:type})
+			this.modelCreate(type)
         }
 
-        if ( ! this._cache[type][id] )
+        if ( ! this._model[type][id] )
         {
-			this._cache[type][id] = new Model({}, { model: this._cache[type], property: id })
+			this.modelCreate(type, id)
         }
 
-		this._cache[type][id].sync(data)
-        return this._cache[type][id]
+		this._model[type][id].sync(data)
+        return this._model[type][id]
     }
 
     url(options)
@@ -173,14 +200,14 @@ class Store
     {
         let results = new Model()
 
-        for( let _type in this._cache )
+        for( let _type in this._model )
         {
             if ( _type == '_paging' || (query.type && this.type({type:query.type}) != _type) ) continue
 
-            for( let _id in this._cache[_type])
+            for( let _id in this._model[_type])
             {
                 let _match = true
-                let _data = this.data(this._cache[_type][_id])
+                let _data = this.data(this._model[_type][_id])
                 for ( let _term in query )
                 {
                     if ( _term != 'type' && (! _data.hasOwnProperty(_term) || _data[_term] != query[_term]) )
@@ -210,15 +237,15 @@ class Store
             id = query.id
         }
 
-        if ( this._cache[type] )
+        if ( this._model[type] )
         {
-            if ( id != undefined && this._cache[type][id])
+            if ( id != undefined && this._model[type][id])
             {
-                return Promise.resolve(this._cache[type][id])
+                return Promise.resolve(this._model[type][id])
             }
             else if ( id == undefined && Object.keys(query).length == 0 )
             {
-                return Promise.resolve(this._cache[type])
+                return Promise.resolve(this._model[type])
             }
             else if ( id == undefined )
             {
@@ -248,7 +275,7 @@ class Store
         size = parseInt(size) || this.options.per_page
         page = parseInt(page) || 1
 
-        let cache = this._cache._paging
+        let cache = this._model._paging
 
         if ( (type in cache) && (size in cache[type]) && (page in cache[type][size]) )
         {
@@ -317,8 +344,26 @@ class Store
 
         return fetch(url, options)
             .then(response => response.ok ? response.json() : Promise.reject(response))
-            .then(json => { delete this._cache[type][id]; return json } )
+            .then(json => { delete this._model[type][id]; return json } )
     }
+
+    static cache(store)
+	{
+		if ('string' == typeof store)
+		{
+			return _cache[store]
+		}
+
+		if (store.options.baseUrl in _cache)
+		{
+			return this
+		}
+
+		_cache[store.options.baseUrl] = store
+		return this
+	}
 }
+
+let _cache = {}
 
 export { Store }
