@@ -94,13 +94,15 @@ class Store
 		if (!this._model[type])
 		{
 			this._model[type] = new Model({}, { model: this._model, property: type })
+
+			this.actionCreate(type, 'get')
+			this.actionCreate(type, 'post')
+			this.actionCreate(type, 'patch')
+			this.actionCreate(type, 'delete')
+			
 			if (this.options.viewClass && this.options.viewMap.hasOwnProperty(type))
 			{
 				new this.options.viewClass(this.options.viewMap[type], this._model[type])
-				this.actionCreate(type, 'get')
-				this.actionCreate(type, 'post')
-				this.actionCreate(type, 'patch')
-				this.actionCreate(type, 'delete')
 			}
 		}
 
