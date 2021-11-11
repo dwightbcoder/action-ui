@@ -1,6 +1,6 @@
 import * as Util from './util.js'
 import { Model } from './model.js'
-import { View } from './view.js'
+import { Action } from './action.js'
 
 /**
  * Store
@@ -10,75 +10,83 @@ import { View } from './view.js'
  */
 class Store
 {
-    constructor(options)
-    {
-        this.options = {
-            'baseUrl': null,
-            'types': null,
-            'keys': {
-                'data': null,
-                'type': 'type',
-                'id': 'id'
-            },
-            'per_page': 0,
-            'query': {
-                'page[number]': 'page[number]',
-                'page[size]': 'page[size]'
-            },
-            'fetch': {
-                'method': 'GET',
-                'headers': new Headers({'Content-Type': 'application/json'}),
-                'mode': 'no-cors'
-            },
-            'triggerChangesOnError': true, // Allows views to update contents on failed requests, especially useful for Fetch All requests which return no results or 404
-            'verbose': false,
+	constructor(options)
+	{
+		this.options = {
+			'baseUrl': null,
+			'types': null,
+			'keys': {
+				'data': null,
+				'type': 'type',
+				'id': 'id'
+			},
+			'per_page': 0,
+			'query': {
+				'page[number]': 'page[number]',
+				'page[size]': 'page[size]'
+			},
+			'fetch': {
+				'method': 'GET',
+				'headers': new Headers({ 'Content-Type': 'application/json' }),
+				'mode': 'no-cors'
+			},
+			'triggerChangesOnError': true, // Allows views to update contents on failed requests, especially useful for Fetch All requests which return no results or 404
+			'verbose': false,
 			'viewClass': null,
-			'viewMap': {}
-        }
-        Util.deepAssign(this.options, options||{})
-		if (this.options.viewClass == null)
+			'viewMap': {},
+			'actionVerb': {
+				'get': 'fetch',
+				'post': 'create',
+				'patch': 'update',
+				'delete': 'delete'
+			},
+			'actionHandler': {
+				'get': function (type, method, resolve, reject, data) { this.fetch(type, data.id).then(json => resolve(json)).catch(response => response.json().then(json => reject(json))) },
+				'post': function (type, method, resolve, reject, data) { this.post(type, data).then(json => resolve(json)).catch(response => response.json().then(json => reject(json))) },
+				'patch': function (type, method, resolve, reject, data) { this.patch(type, data).then(json => resolve(json)).catch(response => response.json().then(json => reject(json))) },
+				'delete': function (type, method, resolve, reject, data) { this.delete(type, data.id).then(json => resolve(json)).catch(response => response.json().then(json => reject(json))) },
+			}
+		}
+		Util.deepAssign(this.options, options || {})
+
+		this._model = new Model()
+		this._model._paging = {}
+
+		// Accept an array of store keys
+		if (this.options.types instanceof Array) 
 		{
-			this.options.viewClass = View
+			let _types = {}
+			// Turn them into seperate stores
+			for (let i in this.options.types)
+			{
+				_types[this.options.types[i]] = this.options.types[i]
+			}
+
+			this.options.types = _types
 		}
 
-        this._model = new Model()
-        this._model._paging = {}
-        
-        // Accept an array of store keys
-        if ( this.options.types instanceof Array ) 
-        {
-            let _types = {}
-            // Turn them into seperate stores
-            for ( let i in this.options.types )
-            {
-                _types[this.options.types[i]] = this.options.types[i]
-            }
-
-            this.options.types = _types
-        }
-
-        if ( this.options.types instanceof Object )
-        {
-            for ( let i in this.options.types )
-            {
+		if (this.options.types instanceof Object)
+		{
+			for (let i in this.options.types)
+			{
 				this.modelCreate(this.options.types[i])
-            }
-        }
+			}
+		}
 
 		Store.cache(this)
-    }
+	}
 
-    body(data)
-    {
-        return JSON.stringify(data)
-    }
+	body(data)
+	{
+		return JSON.stringify(data)
+	}
 
-    model(type, id)
-    {
-        return this._model[type]
-    }
+	model(type, id)
+	{
+		return this._model[type]
+	}
 
-    modelCreate(type, id = null)
+	modelCreate(type, id = null)
 	{
 		if (!('string' == typeof type))
 			throw new Error('Store: Cannot create model without `type`')
@@ -86,9 +94,13 @@ class Store
 		if (!this._model[type])
 		{
 			this._model[type] = new Model({}, { model: this._model, property: type })
-			if (this.options.viewMap.hasOwnProperty(type))
+			if (this.options.viewClass && this.options.viewMap.hasOwnProperty(type))
 			{
 				new this.options.viewClass(this.options.viewMap[type], this._model[type])
+				this.actionCreate(type, 'get')
+				this.actionCreate(type, 'post')
+				this.actionCreate(type, 'patch')
+				this.actionCreate(type, 'delete')
 			}
 		}
 
@@ -98,268 +110,293 @@ class Store
 		}
 	}
 
-    data(json)
-    {
-        return this.options.keys.data ? json[this.options.keys.data] : json
-    }
+	actionCreate(type, method)
+	{
+		method = method.toLowerCase()
+		var actionName = type + ' ' + this.options.actionVerb[method]
+		var handler = this.options.actionHandler[method].bind(this, type, method)
 
-    type(json)
-    {
-        let type = json[this.options.keys.type]
-        if ( this.options.types[type] )
-        {
-            type = this.options.types[type]
-        }
+		var action = new Action(actionName, handler)
+		Action.cache(action)
+		return action
+	}
 
-        return type
-    }
+	data(json)
+	{
+		return this.options.keys.data ? json[this.options.keys.data] : json
+	}
 
-    id(json)
-    {
-        return json[this.options.keys.id]
-    }
+	type(json)
+	{
+		let type = json[this.options.keys.type]
+		if (this.options.types[type])
+		{
+			type = this.options.types[type]
+		}
 
-    sync(json)
-    {
-        let data = this.data(json)
+		return type
+	}
 
-        if ( ! data )
-        {
-            throw new Error('Store: No data to sync')
-        }
+	id(json)
+	{
+		return json[this.options.keys.id]
+	}
 
-        if (data instanceof Array)
-        {
-            let _collection = {}
+	sync(json)
+	{
+		let data = this.data(json)
 
-            for (let i in data)
-            {
-                let _data = null
+		if (!data)
+		{
+			throw new Error('Store: No data to sync')
+		}
 
-                if ( this.options.keys.data )
-                {
-                    _data = {}
-                    _data[this.options.keys.data] = data[i]
-                }
-                else
-                {
-                    _data = data[i]
-                }
+		if (data instanceof Array)
+		{
+			let _collection = {}
 
-                _collection[this.id(data[i])] = this.sync(_data)
-            }
+			for (let i in data)
+			{
+				let _data = null
 
-            return _collection
-        }
+				if (this.options.keys.data)
+				{
+					_data = {}
+					_data[this.options.keys.data] = data[i]
+				}
+				else
+				{
+					_data = data[i]
+				}
 
-        let type = this.type(data)
-        let id = this.id(data)
+				_collection[this.id(data[i])] = this.sync(_data)
+			}
 
-        if ( ! this._model[type] )
-        {
+			return _collection
+		}
+
+		let type = this.type(data)
+		let id = this.id(data)
+
+		if (!this._model[type])
+		{
 			this.modelCreate(type)
-        }
+		}
 
-        if ( ! this._model[type][id] )
-        {
+		if (!this._model[type][id])
+		{
 			this.modelCreate(type, id)
-        }
+		}
 
 		this._model[type][id].sync(data)
-        return this._model[type][id]
-    }
+		return this._model[type][id]
+	}
 
-    url(options)
-    {
-        let type = this.options.types[options.type] || options.type
-        let url = this.options.baseUrl + '/' + type + '/' + (options.id ? options.id + '/' : '')
-        let query = []
-
-        for ( let i in options )
-        {
-            if ( i in this.options.query )
-            {
-                query.push( this.options.query[i] + '=' + options[i] )
-            }
-            else if ( i != 'type' && i != 'id' )
-            {
-                query.push( i + '=' + options[i] )
-            }
-        }
-
-        let qs = query.join('&')
-        if ( qs )
-        {
-            url += '?' + qs
-        }
-
-        return url
-    }
-
-    search(query)
-    {
-        let results = new Model()
-
-        for( let _type in this._model )
-        {
-            if ( _type == '_paging' || (query.type && this.type({type:query.type}) != _type) ) continue
-
-            for( let _id in this._model[_type])
-            {
-                let _match = true
-                let _data = this.data(this._model[_type][_id])
-                for ( let _term in query )
-                {
-                    if ( _term != 'type' && (! _data.hasOwnProperty(_term) || _data[_term] != query[_term]) )
-                    {
-                        _match = false
-                        break
-                    }
-                }
-
-                if ( _match )
-                {
-                    results[_id] = _data
-                }
-            }
-        }
-
-        return results
-    }
-
-    fetch(type, id, query = {})
-    {
-        type = this.type({type:type})
-
-        if ( typeof id == 'object' )
-        {
-            query = id
-            id = query.id
-        }
-
-        if ( this._model[type] )
-        {
-            if ( id != undefined && this._model[type][id])
-            {
-                return Promise.resolve(this._model[type][id])
-            }
-            else if ( id == undefined && Object.keys(query).length == 0 )
-            {
-                return Promise.resolve(this._model[type])
-            }
-            else if ( id == undefined )
-            {
-                query.type = type
-                let search = this.search(query)
-                if ( Object.keys(search).length )
-                {
-                    return Promise.resolve(search)
-                }
-            }
-        }
-
-        Object.assign(query, {type:type, id:id})
-        let url = this.url(query)
-        return fetch(url, this.options.fetch)
-            .then(response => response.ok ? response.json() : Promise.reject(response))
-            .then((json) => this.sync(json))
-            .catch((error) =>
-            {
-                if (this.options.triggerChangesOnError) this.model(type).triggerChanges()
-                return Promise.reject(error)
-            })
-    }
-
-    page(type, page = 1, size = 0)
-    {
-        size = parseInt(size) || this.options.per_page
-        page = parseInt(page) || 1
-
-        let cache = this._model._paging
-
-        if ( (type in cache) && (size in cache[type]) && (page in cache[type][size]) )
-        {
-            return Promise.resolve().then(() => cache[type][size][page])
-        }
-        else
-        {
-            if (!(type in cache)) cache[type] = {}
-            if (!(size in cache[type])) cache[type][size] = {}
-            if (!(page in cache[type][size])) cache[type][size][page] = new Model({
-                type: type,
-                number: page,
-                size: size,
-                count: 0,
-                links: {},
-                model: new Model()
-            })
-        }
-
-        let url = this.url({type:type, 'page[number]':page, 'page[size]':size})
-        return fetch(url, this.options.fetch)
-            .then(response => response.ok ? response.json() : Promise.reject(response))
-            .then(json => cache[type][size][page].sync(
-            {
-                links: json.links || {},
-                count: Object.keys(this.data(json)).length,
-                model: this.sync(json)
-            }))
-    }
-
-    post(type, data)
-    {
-        let options = Object.create(this.options.fetch)
-        options.method = 'POST'
-
-        type = type || this.type(data)
-        let url = this.url({type:type, id:this.id(data)})
-
-        return fetch(url, options)
-            .then(response => response.json())
-            .then((json) => this.sync(json))
-    }
-
-    patch(type, data)
-    {
-        let options = Object.create(this.options.fetch)
-        options.method = 'PATCH'
-        options.body = this.body(data)
-
-        type = type || this.type(data)
-        let url = this.url({type:type, id:this.id(data)})
-        return fetch(url, options)
-            .then(response => response.json())
-            .then((json) => this.sync(json))
-    }
-
-    delete(type, id)
-    {
-        let options = Object.create(this.options.fetch)
-        options.method = 'DELETE'
-
-        let url = this.url({ type: type, id: id })
-
-        if (this.options.verbose)
-            console.info('Store.delete()', type, id, { store: this, url: url, options: options })
-
-        return fetch(url, options)
-            .then(response => response.ok ? response.json() : Promise.reject(response))
-            .then(json => { delete this._model[type][id]; return json } )
-    }
-
-    static cache(store)
+	url(options)
 	{
+		let type = this.options.types[options.type] || options.type
+		let url = this.options.baseUrl + '/' + type + '/' + (options.id ? options.id + '/' : '')
+		let query = []
+
+		for (let i in options)
+		{
+			if (i in this.options.query)
+			{
+				query.push(this.options.query[i] + '=' + options[i])
+			}
+			else if (i != 'type' && i != 'id')
+			{
+				query.push(i + '=' + options[i])
+			}
+		}
+
+		let qs = query.join('&')
+		if (qs)
+		{
+			url += '?' + qs
+		}
+
+		return url
+	}
+
+	search(query)
+	{
+		let results = new Model()
+
+		for (let _type in this._model)
+		{
+			if (_type == '_paging' || (query.type && this.type({ type: query.type }) != _type)) continue
+
+			for (let _id in this._model[_type])
+			{
+				let _match = true
+				let _data = this.data(this._model[_type][_id])
+				for (let _term in query)
+				{
+					if (_term != 'type' && (!_data.hasOwnProperty(_term) || _data[_term] != query[_term]))
+					{
+						_match = false
+						break
+					}
+				}
+
+				if (_match)
+				{
+					results[_id] = _data
+				}
+			}
+		}
+
+		return results
+	}
+
+	fetch(type, id, query = {})
+	{
+		type = this.type({ type: type })
+
+		if (typeof id == 'object')
+		{
+			query = id
+			id = query.id
+		}
+
+		if (this._model[type])
+		{
+			if (id != undefined && this._model[type][id])
+			{
+				return Promise.resolve(this._model[type][id])
+			}
+			else if (id == undefined && Object.keys(query).length == 0)
+			{
+				return Promise.resolve(this._model[type])
+			}
+			else if (id == undefined)
+			{
+				query.type = type
+				let search = this.search(query)
+				if (Object.keys(search).length)
+				{
+					return Promise.resolve(search)
+				}
+			}
+		}
+
+		Object.assign(query, { type: type, id: id })
+		let url = this.url(query)
+		return fetch(url, this.options.fetch)
+			.then(response => response.ok ? response.json() : Promise.reject(response))
+			.then((json) => this.sync(json))
+			.catch((error) =>
+			{
+				if (this.options.triggerChangesOnError) this.model(type).triggerChanges()
+				return Promise.reject(error)
+			})
+	}
+
+	page(type, page = 1, size = 0)
+	{
+		size = parseInt(size) || this.options.per_page
+		page = parseInt(page) || 1
+
+		let cache = this._model._paging
+
+		if ((type in cache) && (size in cache[type]) && (page in cache[type][size]))
+		{
+			return Promise.resolve().then(() => cache[type][size][page])
+		}
+		else
+		{
+			if (!(type in cache)) cache[type] = {}
+			if (!(size in cache[type])) cache[type][size] = {}
+			if (!(page in cache[type][size])) cache[type][size][page] = new Model({
+				type: type,
+				number: page,
+				size: size,
+				count: 0,
+				links: {},
+				model: new Model()
+			})
+		}
+
+		let url = this.url({ type: type, 'page[number]': page, 'page[size]': size })
+		return fetch(url, this.options.fetch)
+			.then(response => response.ok ? response.json() : Promise.reject(response))
+			.then(json => cache[type][size][page].sync(
+				{
+					links: json.links || {},
+					count: Object.keys(this.data(json)).length,
+					model: this.sync(json)
+				}))
+	}
+
+	post(type, data)
+	{
+		let options = Object.create(this.options.fetch)
+		options.method = 'POST'
+
+		type = type || this.type(data)
+		let url = this.url({ type: type, id: this.id(data) })
+
+		return fetch(url, options)
+			.then(response => response.json())
+			.then((json) => this.sync(json))
+	}
+
+	patch(type, data)
+	{
+		let options = Object.create(this.options.fetch)
+		options.method = 'PATCH'
+		options.body = this.body(data)
+
+		type = type || this.type(data)
+		let url = this.url({ type: type, id: this.id(data) })
+		return fetch(url, options)
+			.then(response => response.json())
+			.then((json) => this.sync(json))
+	}
+
+	delete(type, id)
+	{
+		let options = Object.create(this.options.fetch)
+		options.method = 'DELETE'
+
+		let url = this.url({ type: type, id: id })
+
+		if (this.options.verbose)
+			console.info('Store.delete()', type, id, { store: this, url: url, options: options })
+
+		return fetch(url, options)
+			.then(response => response.ok ? response.json() : Promise.reject(response))
+			.then(json => { delete this._model[type][id]; return json })
+	}
+
+	static cache(store)
+	{
+		if (store == undefined)
+			return _cache
+
 		if ('string' == typeof store)
 		{
-			return _cache[store]
+			store = store.toLowerCase()
+			if ( _cache[store] != undefined )
+				return _cache[store]
+
+			// Find a store that starts with the requested url to match ('/api/v1/entity' with a '/api/v1' store)
+			for (var i in _cache)
+			{
+				if (i.startsWith(store))
+					return _cache[i]
+			}
+
+			return undefined
 		}
 
-		if (store.options.baseUrl in _cache)
-		{
+		var baseUrl = store.options.baseUrl.toLowerCase()
+
+		if (baseUrl in _cache)
 			return this
-		}
 
-		_cache[store.options.baseUrl] = store
+		_cache[baseUrl] = store
 		return this
 	}
 }

@@ -1,6 +1,8 @@
 /**
  * Utilities
  */
+
+// Recursively copy source properties to target (Warning: Classes are treated as Objects)
 function deepAssign(target, source, dereference = false)
 {
 	if (dereference)
@@ -24,7 +26,7 @@ function deepAssign(target, source, dereference = false)
 					target[i] = Object.assign({}, target[i])
 				}
 
-                if (target[i] instanceof Object && source[i] instanceof Object)
+				if (target[i] instanceof Object && source[i] instanceof Object && !(target[i] instanceof Function || source[i] instanceof Function))
 				{
 					deepAssign(target[i], source[i])
                 }
