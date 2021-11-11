@@ -14,7 +14,7 @@ class Action
 		this.model = model ? model : new Model()
 		this.running = false
 
-		if ( _options.autoCache )
+		if (_options.autoCache)
 		{
 			Action.cache(this)
 		}
@@ -23,7 +23,7 @@ class Action
 	// trigger before event and run the handler as a promise 
 	run(target, data = {})
 	{
-		if (_options.verbose) console.info('Action.run()', this.name, {action:this, target:target, data:data})
+		if (_options.verbose) console.info('Action.run()', this.name, { action: this, target: target, data: data })
 
 		this.running = true
 		target = target || document.body
@@ -46,14 +46,14 @@ class Action
 
 				if (options.method == 'POST')
 				{
-					if ( target.attributes.enctype && target.attributes.enctype.value == 'application/json' )
+					if (target.attributes.enctype && target.attributes.enctype.value == 'application/json')
 					{
 						options.body = JSON.stringify(data)
 					}
 					else
 					{
 						let formData = new FormData()
-						for ( let key in data ) formData.append(key, data[key])
+						for (let key in data) formData.append(key, data[key])
 						options.body = formData
 					}
 				}
@@ -87,11 +87,11 @@ class Action
 			data = { result: data }
 		}
 
-		if ( this.model.sync && this.model.sync instanceof Function )
+		if (this.model.sync && this.model.sync instanceof Function)
 		{
 			this.model.sync(data)
 		}
-		else if ( this.model instanceof Object )
+		else if (this.model instanceof Object)
 		{
 			Util.deepAssign(this.model, data)
 		}
@@ -125,7 +125,7 @@ class Action
 		Action.setCssClass(target, cssClass)
 		Action.reflectCssClass(this.name, cssClass)
 
-		if ( result != undefined )
+		if (result != undefined)
 		{
 			this.syncModel(result)
 		}
@@ -151,7 +151,7 @@ class Action
 		{
 			let target = Util.firstMatchingParentElement(e.target, '[ui-action]')
 
-			if ( target && target.tagName != 'FORM' )
+			if (target && target.tagName != 'FORM')
 			{
 				if (!(target.tagName == 'INPUT' && target.type == 'checkbox'))
 					e.preventDefault()
@@ -165,7 +165,7 @@ class Action
 						_cache[actionName].run(target)
 					}
 				}
-				else if ( _options.autoCreate )
+				else if (_options.autoCreate)
 				{
 					// Auto create and run action
 					var action = Action.createFromElement(target)
@@ -195,7 +195,7 @@ class Action
 						_cache[actionName].run(e.target)
 					}
 				}
-				else if ( _options.autoCreate )
+				else if (_options.autoCreate)
 				{
 					// Auto create and run action
 					var action = Action.createFromElement(e.target)
@@ -241,21 +241,19 @@ class Action
 	// Cache an action 
 	static cache(action)
 	{
+		if (action == undefined)
+			return _cache
+
 		if ('string' == typeof action)
-		{
 			return _cache[action]
-		}
 
 		if (action.name in _cache)
-		{
-			return Action
-			//throw 'Action name already exists: "' + action.name + '"'
-		}
+			return this
 
 		_cache[action.name] = action
-		return Action
+		return this
 	}
-
+	
 	static data(target)
 	{
 		var data = target.dataset || {}
@@ -283,7 +281,7 @@ class Action
 	// Propagate class to all reflectors (ui-state and form submit buttons)
 	static reflectCssClass(name, cssClass)
 	{
-		document.querySelectorAll('form[ui-action="'+name+'"] [type="submit"], form[ui-action="'+name+'"] button:not([type]), [ui-state="'+name+'"]')
+		document.querySelectorAll('form[ui-action="' + name + '"] [type="submit"], form[ui-action="' + name + '"] button:not([type]), [ui-state="' + name + '"]')
 			.forEach((el) => Action.setCssClass(el, cssClass))
 	}
 

@@ -31,6 +31,7 @@ var ActionUI = function (exports) {
   /**
    * Utilities
    */
+  // Recursively copy source properties to target (Warning: Classes are treated as Objects)
 
   function deepAssign(target, source) {
     var dereference = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
@@ -50,7 +51,7 @@ var ActionUI = function (exports) {
             target[i] = Object.assign({}, target[i]);
           }
 
-          if (target[i] instanceof Object && source[i] instanceof Object) {
+          if (target[i] instanceof Object && source[i] instanceof Object && !(target[i] instanceof Function || source[i] instanceof Function)) {
             deepAssign(target[i], source[i]);
           } else if (target[i] != source[i]) {
             target[i] = source[i];
@@ -566,16 +567,11 @@ var ActionUI = function (exports) {
     }, {
       key: "cache",
       value: function cache(action) {
-        if ('string' == typeof action) {
-          return _cache[action];
-        }
-
-        if (action.name in _cache) {
-          return Action; //throw 'Action name already exists: "' + action.name + '"'
-        }
-
+        if (action == undefined) return _cache;
+        if ('string' == typeof action) return _cache[action];
+        if (action.name in _cache) return this;
         _cache[action.name] = action;
-        return Action;
+        return this;
       }
     }, {
       key: "data",
@@ -846,7 +842,7 @@ var ActionUI = function (exports) {
   }(Model);
   /**
    * Store
-   * @version 20210305
+   * @version 20211104
    * @description Remote data store
    * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
    */
@@ -878,11 +874,57 @@ var ActionUI = function (exports) {
         },
         'triggerChangesOnError': true,
         // Allows views to update contents on failed requests, especially useful for Fetch All requests which return no results or 404
-        'verbose': false
+        'verbose': false,
+        'viewClass': null,
+        'viewMap': {},
+        'actionVerb': {
+          'get': 'fetch',
+          'post': 'create',
+          'patch': 'update',
+          'delete': 'delete'
+        },
+        'actionHandler': {
+          'get': function get(type, method, resolve, reject, data) {
+            this.fetch(type, data.id).then(function (json) {
+              return resolve(json);
+            }).catch(function (response) {
+              return response.json().then(function (json) {
+                return reject(json);
+              });
+            });
+          },
+          'post': function post(type, method, resolve, reject, data) {
+            this.post(type, data).then(function (json) {
+              return resolve(json);
+            }).catch(function (response) {
+              return response.json().then(function (json) {
+                return reject(json);
+              });
+            });
+          },
+          'patch': function patch(type, method, resolve, reject, data) {
+            this.patch(type, data).then(function (json) {
+              return resolve(json);
+            }).catch(function (response) {
+              return response.json().then(function (json) {
+                return reject(json);
+              });
+            });
+          },
+          'delete': function _delete(type, method, resolve, reject, data) {
+            this.delete(type, data.id).then(function (json) {
+              return resolve(json);
+            }).catch(function (response) {
+              return response.json().then(function (json) {
+                return reject(json);
+              });
+            });
+          }
+        }
       };
       deepAssign(this.options, options || {});
-      var model = new Model();
-      model._paging = {}; // Accept an array of store keys
+      this._model = new Model();
+      this._model._paging = {}; // Accept an array of store keys
 
       if (this.options.types instanceof Array) {
         var _types = {}; // Turn them into seperate stores
@@ -896,14 +938,11 @@ var ActionUI = function (exports) {
 
       if (this.options.types instanceof Object) {
         for (var _i in this.options.types) {
-          model[this.options.types[_i]] = new Model({}, {
-            model: model,
-            property: this.options.types[_i]
-          });
+          this.modelCreate(this.options.types[_i]);
         }
       }
 
-      this._cache = model;
+      Store.cache(this);
     }
 
     _createClass(Store, [{
@@ -914,7 +953,45 @@ var ActionUI = function (exports) {
     }, {
       key: "model",
       value: function model(type, id) {
-        return this._cache[type];
+        return this._model[type];
+      }
+    }, {
+      key: "modelCreate",
+      value: function modelCreate(type) {
+        var id = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : null;
+        if (!('string' == typeof type)) throw new Error('Store: Cannot create model without `type`');
+
+        if (!this._model[type]) {
+          this._model[type] = new Model({}, {
+            model: this._model,
+            property: type
+          });
+
+          if (this.options.viewClass && this.options.viewMap.hasOwnProperty(type)) {
+            new this.options.viewClass(this.options.viewMap[type], this._model[type]);
+            this.actionCreate(type, 'get');
+            this.actionCreate(type, 'post');
+            this.actionCreate(type, 'patch');
+            this.actionCreate(type, 'delete');
+          }
+        }
+
+        if (id != null && 'string' == typeof id && !this._model[type][id]) {
+          this._model[type][id] = new Model({}, {
+            model: this._model[type],
+            property: id
+          });
+        }
+      }
+    }, {
+      key: "actionCreate",
+      value: function actionCreate(type, method) {
+        method = method.toLowerCase();
+        var actionName = type + ' ' + this.options.actionVerb[method];
+        var handler = this.options.actionHandler[method].bind(this, type, method);
+        var action = new Action(actionName, handler);
+        Action.cache(action);
+        return action;
       }
     }, {
       key: "data",
@@ -968,23 +1045,17 @@ var ActionUI = function (exports) {
         var type = this.type(data);
         var id = this.id(data);
 
-        if (!this._cache[type]) {
-          this._cache[type] = new Model({}, {
-            model: this._cache,
-            property: type
-          });
+        if (!this._model[type]) {
+          this.modelCreate(type);
         }
 
-        if (!this._cache[type][id]) {
-          this._cache[type][id] = new Model({}, {
-            model: this._cache[type],
-            property: id
-          });
+        if (!this._model[type][id]) {
+          this.modelCreate(type, id);
         }
 
-        this._cache[type][id].sync(data);
+        this._model[type][id].sync(data);
 
-        return this._cache[type][id];
+        return this._model[type][id];
       }
     }, {
       key: "url",
@@ -1014,15 +1085,15 @@ var ActionUI = function (exports) {
       value: function search(query) {
         var results = new Model();
 
-        for (var _type in this._cache) {
+        for (var _type in this._model) {
           if (_type == '_paging' || query.type && this.type({
             type: query.type
           }) != _type) continue;
 
-          for (var _id in this._cache[_type]) {
+          for (var _id in this._model[_type]) {
             var _match = true;
 
-            var _data = this.data(this._cache[_type][_id]);
+            var _data = this.data(this._model[_type][_id]);
 
             for (var _term in query) {
               if (_term != 'type' && (!_data.hasOwnProperty(_term) || _data[_term] != query[_term])) {
@@ -1064,11 +1135,11 @@ var ActionUI = function (exports) {
           id = query.id;
         }
 
-        if (this._cache[type]) {
-          if (id != undefined && this._cache[type][id]) {
-            return Promise.resolve(this._cache[type][id]);
+        if (this._model[type]) {
+          if (id != undefined && this._model[type][id]) {
+            return Promise.resolve(this._model[type][id]);
           } else if (id == undefined && Object.keys(query).length == 0) {
-            return Promise.resolve(this._cache[type]);
+            return Promise.resolve(this._model[type]);
           } else if (id == undefined) {
             query.type = type;
             var search = this.search(query);
@@ -1103,7 +1174,7 @@ var ActionUI = function (exports) {
         var size = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
         size = parseInt(size) || this.options.per_page;
         _page2 = parseInt(_page2) || 1;
-        var cache = this._cache._paging;
+        var cache = this._model._paging;
 
         if (type in cache && size in cache[type] && _page2 in cache[type][size]) {
           return Promise.resolve().then(function () {
@@ -1193,14 +1264,37 @@ var ActionUI = function (exports) {
         return fetch(url, options).then(function (response) {
           return response.ok ? response.json() : Promise.reject(response);
         }).then(function (json) {
-          delete _this10._cache[type][id];
+          delete _this10._model[type][id];
           return json;
         });
+      }
+    }], [{
+      key: "cache",
+      value: function cache(store) {
+        if (store == undefined) return _cache$1;
+
+        if ('string' == typeof store) {
+          store = store.toLowerCase();
+          if (_cache$1[store] != undefined) return _cache$1[store]; // Find a store that starts with the requested url to match ('/api/v1/entity' with a '/api/v1' store)
+
+          for (var i in _cache$1) {
+            if (i.startsWith(store)) return _cache$1[i];
+          }
+
+          return undefined;
+        }
+
+        var baseUrl = store.options.baseUrl.toLowerCase();
+        if (baseUrl in _cache$1) return this;
+        _cache$1[baseUrl] = store;
+        return this;
       }
     }]);
 
     return Store;
   }();
+
+  var _cache$1 = {};
 
   var StoreJsonApi = /*#__PURE__*/function (_Store) {
     _inherits(StoreJsonApi, _Store);
@@ -1441,17 +1535,17 @@ var ActionUI = function (exports) {
         });
 
         if ('string' == typeof view) {
-          return _cache$1[view];
+          return _cache$2[view];
         } else if (view instanceof View) {
-          if (view.name in _cache$1) {
+          if (view.name in _cache$2) {
             throw 'View name already exists: "' + view.name + '"';
           }
 
-          _cache$1[view.name] = view;
+          _cache$2[view.name] = view;
           return this;
         }
 
-        return _cache$1;
+        return _cache$2;
       } // Render all views
 
     }, {
@@ -1468,7 +1562,7 @@ var ActionUI = function (exports) {
     return View;
   }();
 
-  var _cache$1 = {};
+  var _cache$2 = {};
   var _options$1 = {
     verbose: false,
     autoCache: true,
@@ -1771,11 +1865,11 @@ var ActionUI = function (exports) {
           pathMethod = route == '/' ? _options$4.defaultMethod : path[0];
         }
 
-        if (!_cache$2[controller]) {
+        if (!_cache$3[controller]) {
           if (this.controllers[controller]) {
-            _cache$2[controller] = new this.controllers[controller](this.view);
+            _cache$3[controller] = new this.controllers[controller](this.view);
           } else {
-            _cache$2[controller] = new Controller(this.view);
+            _cache$3[controller] = new Controller(this.view);
           }
         }
 
@@ -1784,13 +1878,13 @@ var ActionUI = function (exports) {
         var view = pathController + _options$4.pathSeparator + pathMethod;
         var method = camelCase(pathMethod);
 
-        if (_cache$2[controller].view instanceof ViewFile) {
-          _cache$2[controller].view.file = view;
-        } else if (_cache$2[controller].view instanceof ViewHandlebars) {
-          _cache$2[controller].view.html = view;
+        if (_cache$3[controller].view instanceof ViewFile) {
+          _cache$3[controller].view.file = view;
+        } else if (_cache$3[controller].view instanceof ViewHandlebars) {
+          _cache$3[controller].view.html = view;
         }
 
-        if (_options$4.autoload && !(_cache$2[controller][method] instanceof Function)) {
+        if (_options$4.autoload && !(_cache$3[controller][method] instanceof Function)) {
           method = _options$4.autoloadMethod;
         }
 
@@ -1822,12 +1916,12 @@ var ActionUI = function (exports) {
               result = match.callback.run(target, data);
             } else {
               args.push(model);
-              result = match.callback.apply(_cache$2[controller], args);
+              result = match.callback.apply(_cache$3[controller], args);
             }
           } else {
-            _cache$2[controller].view.model.clear().sync(model).clearChanges();
+            _cache$3[controller].view.model.clear().sync(model).clearChanges();
 
-            result = _cache$2[controller][method].apply(_cache$2[controller], args);
+            result = _cache$3[controller][method].apply(_cache$3[controller], args);
             this.pushState(route, {
               controller: pathController,
               method: pathMethod,
@@ -1887,15 +1981,15 @@ var ActionUI = function (exports) {
         model.view = model.controller + _options$4.pathSeparator + _options$4.errorView;
         model.path = path.join(_options$4.pathSeparator);
 
-        if (_cache$2[controller].view instanceof ViewFile) {
-          _cache$2[controller].view.file = (_options$4.useControllerErrorViews ? model.controller + _options$4.pathSeparator : '') + _options$4.errorView;
+        if (_cache$3[controller].view instanceof ViewFile) {
+          _cache$3[controller].view.file = (_options$4.useControllerErrorViews ? model.controller + _options$4.pathSeparator : '') + _options$4.errorView;
         } else {
-          _cache$2[controller].view.html = 'Error loading ' + model.path;
+          _cache$3[controller].view.html = 'Error loading ' + model.path;
         }
 
-        _cache$2[controller].view.model.clear().sync(model).clearChanges();
+        _cache$3[controller].view.model.clear().sync(model).clearChanges();
 
-        return _cache$2[controller][_options$4.errorMethod]();
+        return _cache$3[controller][_options$4.errorMethod]();
       }
     }, {
       key: "sanitizePath",
@@ -2007,7 +2101,7 @@ var ActionUI = function (exports) {
     return Router;
   }();
 
-  var _cache$2 = {};
+  var _cache$3 = {};
   var _options$4 = {
     controllers: {},
     view: 'controller',

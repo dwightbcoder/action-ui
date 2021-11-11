@@ -4,6 +4,8 @@ var ActionUI = (function (exports) {
     /**
      * Utilities
      */
+
+    // Recursively copy source properties to target (Warning: Classes are treated as Objects)
     function deepAssign(target, source, dereference = false)
     {
     	if (dereference)
@@ -27,7 +29,7 @@ var ActionUI = (function (exports) {
     					target[i] = Object.assign({}, target[i]);
     				}
 
-                    if (target[i] instanceof Object && source[i] instanceof Object)
+    				if (target[i] instanceof Object && source[i] instanceof Object && !(target[i] instanceof Function || source[i] instanceof Function))
     				{
     					deepAssign(target[i], source[i]);
                     }
@@ -327,7 +329,7 @@ var ActionUI = (function (exports) {
     		this.model = model ? model : new Model();
     		this.running = false;
 
-    		if ( _options.autoCache )
+    		if (_options.autoCache)
     		{
     			Action.cache(this);
     		}
@@ -336,7 +338,7 @@ var ActionUI = (function (exports) {
     	// trigger before event and run the handler as a promise 
     	run(target, data = {})
     	{
-    		if (_options.verbose) console.info('Action.run()', this.name, {action:this, target:target, data:data});
+    		if (_options.verbose) console.info('Action.run()', this.name, { action: this, target: target, data: data });
 
     		this.running = true;
     		target = target || document.body;
@@ -359,14 +361,14 @@ var ActionUI = (function (exports) {
 
     				if (options.method == 'POST')
     				{
-    					if ( target.attributes.enctype && target.attributes.enctype.value == 'application/json' )
+    					if (target.attributes.enctype && target.attributes.enctype.value == 'application/json')
     					{
     						options.body = JSON.stringify(data);
     					}
     					else
     					{
     						let formData = new FormData();
-    						for ( let key in data ) formData.append(key, data[key]);
+    						for (let key in data) formData.append(key, data[key]);
     						options.body = formData;
     					}
     				}
@@ -400,11 +402,11 @@ var ActionUI = (function (exports) {
     			data = { result: data };
     		}
 
-    		if ( this.model.sync && this.model.sync instanceof Function )
+    		if (this.model.sync && this.model.sync instanceof Function)
     		{
     			this.model.sync(data);
     		}
-    		else if ( this.model instanceof Object )
+    		else if (this.model instanceof Object)
     		{
     			deepAssign(this.model, data);
     		}
@@ -438,7 +440,7 @@ var ActionUI = (function (exports) {
     		Action.setCssClass(target, cssClass);
     		Action.reflectCssClass(this.name, cssClass);
 
-    		if ( result != undefined )
+    		if (result != undefined)
     		{
     			this.syncModel(result);
     		}
@@ -464,7 +466,7 @@ var ActionUI = (function (exports) {
     		{
     			let target = firstMatchingParentElement(e.target, '[ui-action]');
 
-    			if ( target && target.tagName != 'FORM' )
+    			if (target && target.tagName != 'FORM')
     			{
     				if (!(target.tagName == 'INPUT' && target.type == 'checkbox'))
     					e.preventDefault();
@@ -478,7 +480,7 @@ var ActionUI = (function (exports) {
     						_cache[actionName].run(target);
     					}
     				}
-    				else if ( _options.autoCreate )
+    				else if (_options.autoCreate)
     				{
     					// Auto create and run action
     					var action = Action.createFromElement(target);
@@ -508,7 +510,7 @@ var ActionUI = (function (exports) {
     						_cache[actionName].run(e.target);
     					}
     				}
-    				else if ( _options.autoCreate )
+    				else if (_options.autoCreate)
     				{
     					// Auto create and run action
     					var action = Action.createFromElement(e.target);
@@ -554,21 +556,19 @@ var ActionUI = (function (exports) {
     	// Cache an action 
     	static cache(action)
     	{
+    		if (action == undefined)
+    			return _cache
+
     		if ('string' == typeof action)
-    		{
     			return _cache[action]
-    		}
 
     		if (action.name in _cache)
-    		{
-    			return Action
-    			//throw 'Action name already exists: "' + action.name + '"'
-    		}
+    			return this
 
     		_cache[action.name] = action;
-    		return Action
+    		return this
     	}
-
+    	
     	static data(target)
     	{
     		var data = target.dataset || {};
@@ -596,7 +596,7 @@ var ActionUI = (function (exports) {
     	// Propagate class to all reflectors (ui-state and form submit buttons)
     	static reflectCssClass(name, cssClass)
     	{
-    		document.querySelectorAll('form[ui-action="'+name+'"] [type="submit"], form[ui-action="'+name+'"] button:not([type]), [ui-state="'+name+'"]')
+    		document.querySelectorAll('form[ui-action="' + name + '"] [type="submit"], form[ui-action="' + name + '"] button:not([type]), [ui-state="' + name + '"]')
     			.forEach((el) => Action.setCssClass(el, cssClass));
     	}
 
@@ -772,323 +772,404 @@ var ActionUI = (function (exports) {
 
     /**
      * Store
-     * @version 20210305
+     * @version 20211104
      * @description Remote data store
      * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
      */
     class Store
     {
-        constructor(options)
-        {
-            this.options = {
-                'baseUrl': null,
-                'types': null,
-                'keys': {
-                    'data': null,
-                    'type': 'type',
-                    'id': 'id'
-                },
-                'per_page': 0,
-                'query': {
-                    'page[number]': 'page[number]',
-                    'page[size]': 'page[size]'
-                },
-                'fetch': {
-                    'method': 'GET',
-                    'headers': new Headers({'Content-Type': 'application/json'}),
-                    'mode': 'no-cors'
-                },
-                'triggerChangesOnError': true, // Allows views to update contents on failed requests, especially useful for Fetch All requests which return no results or 404
-                'verbose': false
-            };
-            deepAssign(this.options, options||{});
+    	constructor(options)
+    	{
+    		this.options = {
+    			'baseUrl': null,
+    			'types': null,
+    			'keys': {
+    				'data': null,
+    				'type': 'type',
+    				'id': 'id'
+    			},
+    			'per_page': 0,
+    			'query': {
+    				'page[number]': 'page[number]',
+    				'page[size]': 'page[size]'
+    			},
+    			'fetch': {
+    				'method': 'GET',
+    				'headers': new Headers({ 'Content-Type': 'application/json' }),
+    				'mode': 'no-cors'
+    			},
+    			'triggerChangesOnError': true, // Allows views to update contents on failed requests, especially useful for Fetch All requests which return no results or 404
+    			'verbose': false,
+    			'viewClass': null,
+    			'viewMap': {},
+    			'actionVerb': {
+    				'get': 'fetch',
+    				'post': 'create',
+    				'patch': 'update',
+    				'delete': 'delete'
+    			},
+    			'actionHandler': {
+    				'get': function (type, method, resolve, reject, data) { this.fetch(type, data.id).then(json => resolve(json)).catch(response => response.json().then(json => reject(json))); },
+    				'post': function (type, method, resolve, reject, data) { this.post(type, data).then(json => resolve(json)).catch(response => response.json().then(json => reject(json))); },
+    				'patch': function (type, method, resolve, reject, data) { this.patch(type, data).then(json => resolve(json)).catch(response => response.json().then(json => reject(json))); },
+    				'delete': function (type, method, resolve, reject, data) { this.delete(type, data.id).then(json => resolve(json)).catch(response => response.json().then(json => reject(json))); },
+    			}
+    		};
+    		deepAssign(this.options, options || {});
 
-            let model = new Model();
-            model._paging = {};
-            
-            // Accept an array of store keys
-            if ( this.options.types instanceof Array ) 
-            {
-                let _types = {};
-                // Turn them into seperate stores
-                for ( let i in this.options.types )
-                {
-                    _types[this.options.types[i]] = this.options.types[i];
-                }
+    		this._model = new Model();
+    		this._model._paging = {};
 
-                this.options.types = _types;
-            }
+    		// Accept an array of store keys
+    		if (this.options.types instanceof Array) 
+    		{
+    			let _types = {};
+    			// Turn them into seperate stores
+    			for (let i in this.options.types)
+    			{
+    				_types[this.options.types[i]] = this.options.types[i];
+    			}
 
-            if ( this.options.types instanceof Object )
-            {
-                for ( let i in this.options.types )
-                {
-    				model[this.options.types[i]] = new Model({}, { model: model, property: this.options.types[i]});
-                }
-            }
+    			this.options.types = _types;
+    		}
 
-            this._cache = model;
-        }
+    		if (this.options.types instanceof Object)
+    		{
+    			for (let i in this.options.types)
+    			{
+    				this.modelCreate(this.options.types[i]);
+    			}
+    		}
 
-        body(data)
-        {
-            return JSON.stringify(data)
-        }
+    		Store.cache(this);
+    	}
 
-        model(type, id)
-        {
-            return this._cache[type]
-        }
+    	body(data)
+    	{
+    		return JSON.stringify(data)
+    	}
 
-        data(json)
-        {
-            return this.options.keys.data ? json[this.options.keys.data] : json
-        }
+    	model(type, id)
+    	{
+    		return this._model[type]
+    	}
 
-        type(json)
-        {
-            let type = json[this.options.keys.type];
-            if ( this.options.types[type] )
-            {
-                type = this.options.types[type];
-            }
+    	modelCreate(type, id = null)
+    	{
+    		if (!('string' == typeof type))
+    			throw new Error('Store: Cannot create model without `type`')
 
-            return type
-        }
+    		if (!this._model[type])
+    		{
+    			this._model[type] = new Model({}, { model: this._model, property: type });
+    			if (this.options.viewClass && this.options.viewMap.hasOwnProperty(type))
+    			{
+    				new this.options.viewClass(this.options.viewMap[type], this._model[type]);
+    				this.actionCreate(type, 'get');
+    				this.actionCreate(type, 'post');
+    				this.actionCreate(type, 'patch');
+    				this.actionCreate(type, 'delete');
+    			}
+    		}
 
-        id(json)
-        {
-            return json[this.options.keys.id]
-        }
+    		if (id != null && 'string' == typeof id && !this._model[type][id])
+    		{
+    			this._model[type][id] = new Model({}, { model: this._model[type], property: id });
+    		}
+    	}
 
-        sync(json)
-        {
-            let data = this.data(json);
+    	actionCreate(type, method)
+    	{
+    		method = method.toLowerCase();
+    		var actionName = type + ' ' + this.options.actionVerb[method];
+    		var handler = this.options.actionHandler[method].bind(this, type, method);
 
-            if ( ! data )
-            {
-                throw new Error('Store: No data to sync')
-            }
+    		var action = new Action(actionName, handler);
+    		Action.cache(action);
+    		return action
+    	}
 
-            if (data instanceof Array)
-            {
-                let _collection = {};
+    	data(json)
+    	{
+    		return this.options.keys.data ? json[this.options.keys.data] : json
+    	}
 
-                for (let i in data)
-                {
-                    let _data = null;
+    	type(json)
+    	{
+    		let type = json[this.options.keys.type];
+    		if (this.options.types[type])
+    		{
+    			type = this.options.types[type];
+    		}
 
-                    if ( this.options.keys.data )
-                    {
-                        _data = {};
-                        _data[this.options.keys.data] = data[i];
-                    }
-                    else
-                    {
-                        _data = data[i];
-                    }
+    		return type
+    	}
 
-                    _collection[this.id(data[i])] = this.sync(_data);
-                }
+    	id(json)
+    	{
+    		return json[this.options.keys.id]
+    	}
 
-                return _collection
-            }
+    	sync(json)
+    	{
+    		let data = this.data(json);
 
-            let type = this.type(data);
-            let id = this.id(data);
+    		if (!data)
+    		{
+    			throw new Error('Store: No data to sync')
+    		}
 
-            if ( ! this._cache[type] )
-            {
-    			this._cache[type] = new Model({}, {model:this._cache, property:type});
-            }
+    		if (data instanceof Array)
+    		{
+    			let _collection = {};
 
-            if ( ! this._cache[type][id] )
-            {
-    			this._cache[type][id] = new Model({}, { model: this._cache[type], property: id });
-            }
+    			for (let i in data)
+    			{
+    				let _data = null;
 
-    		this._cache[type][id].sync(data);
-            return this._cache[type][id]
-        }
+    				if (this.options.keys.data)
+    				{
+    					_data = {};
+    					_data[this.options.keys.data] = data[i];
+    				}
+    				else
+    				{
+    					_data = data[i];
+    				}
 
-        url(options)
-        {
-            let type = this.options.types[options.type] || options.type;
-            let url = this.options.baseUrl + '/' + type + '/' + (options.id ? options.id + '/' : '');
-            let query = [];
+    				_collection[this.id(data[i])] = this.sync(_data);
+    			}
 
-            for ( let i in options )
-            {
-                if ( i in this.options.query )
-                {
-                    query.push( this.options.query[i] + '=' + options[i] );
-                }
-                else if ( i != 'type' && i != 'id' )
-                {
-                    query.push( i + '=' + options[i] );
-                }
-            }
+    			return _collection
+    		}
 
-            let qs = query.join('&');
-            if ( qs )
-            {
-                url += '?' + qs;
-            }
+    		let type = this.type(data);
+    		let id = this.id(data);
 
-            return url
-        }
+    		if (!this._model[type])
+    		{
+    			this.modelCreate(type);
+    		}
 
-        search(query)
-        {
-            let results = new Model();
+    		if (!this._model[type][id])
+    		{
+    			this.modelCreate(type, id);
+    		}
 
-            for( let _type in this._cache )
-            {
-                if ( _type == '_paging' || (query.type && this.type({type:query.type}) != _type) ) continue
+    		this._model[type][id].sync(data);
+    		return this._model[type][id]
+    	}
 
-                for( let _id in this._cache[_type])
-                {
-                    let _match = true;
-                    let _data = this.data(this._cache[_type][_id]);
-                    for ( let _term in query )
-                    {
-                        if ( _term != 'type' && (! _data.hasOwnProperty(_term) || _data[_term] != query[_term]) )
-                        {
-                            _match = false;
-                            break
-                        }
-                    }
+    	url(options)
+    	{
+    		let type = this.options.types[options.type] || options.type;
+    		let url = this.options.baseUrl + '/' + type + '/' + (options.id ? options.id + '/' : '');
+    		let query = [];
 
-                    if ( _match )
-                    {
-                        results[_id] = _data;
-                    }
-                }
-            }
+    		for (let i in options)
+    		{
+    			if (i in this.options.query)
+    			{
+    				query.push(this.options.query[i] + '=' + options[i]);
+    			}
+    			else if (i != 'type' && i != 'id')
+    			{
+    				query.push(i + '=' + options[i]);
+    			}
+    		}
 
-            return results
-        }
+    		let qs = query.join('&');
+    		if (qs)
+    		{
+    			url += '?' + qs;
+    		}
 
-        fetch(type, id, query = {})
-        {
-            type = this.type({type:type});
+    		return url
+    	}
 
-            if ( typeof id == 'object' )
-            {
-                query = id;
-                id = query.id;
-            }
+    	search(query)
+    	{
+    		let results = new Model();
 
-            if ( this._cache[type] )
-            {
-                if ( id != undefined && this._cache[type][id])
-                {
-                    return Promise.resolve(this._cache[type][id])
-                }
-                else if ( id == undefined && Object.keys(query).length == 0 )
-                {
-                    return Promise.resolve(this._cache[type])
-                }
-                else if ( id == undefined )
-                {
-                    query.type = type;
-                    let search = this.search(query);
-                    if ( Object.keys(search).length )
-                    {
-                        return Promise.resolve(search)
-                    }
-                }
-            }
+    		for (let _type in this._model)
+    		{
+    			if (_type == '_paging' || (query.type && this.type({ type: query.type }) != _type)) continue
 
-            Object.assign(query, {type:type, id:id});
-            let url = this.url(query);
-            return fetch(url, this.options.fetch)
-                .then(response => response.ok ? response.json() : Promise.reject(response))
-                .then((json) => this.sync(json))
-                .catch((error) =>
-                {
-                    if (this.options.triggerChangesOnError) this.model(type).triggerChanges();
-                    return Promise.reject(error)
-                })
-        }
+    			for (let _id in this._model[_type])
+    			{
+    				let _match = true;
+    				let _data = this.data(this._model[_type][_id]);
+    				for (let _term in query)
+    				{
+    					if (_term != 'type' && (!_data.hasOwnProperty(_term) || _data[_term] != query[_term]))
+    					{
+    						_match = false;
+    						break
+    					}
+    				}
 
-        page(type, page = 1, size = 0)
-        {
-            size = parseInt(size) || this.options.per_page;
-            page = parseInt(page) || 1;
+    				if (_match)
+    				{
+    					results[_id] = _data;
+    				}
+    			}
+    		}
 
-            let cache = this._cache._paging;
+    		return results
+    	}
 
-            if ( (type in cache) && (size in cache[type]) && (page in cache[type][size]) )
-            {
-                return Promise.resolve().then(() => cache[type][size][page])
-            }
-            else
-            {
-                if (!(type in cache)) cache[type] = {};
-                if (!(size in cache[type])) cache[type][size] = {};
-                if (!(page in cache[type][size])) cache[type][size][page] = new Model({
-                    type: type,
-                    number: page,
-                    size: size,
-                    count: 0,
-                    links: {},
-                    model: new Model()
-                });
-            }
+    	fetch(type, id, query = {})
+    	{
+    		type = this.type({ type: type });
 
-            let url = this.url({type:type, 'page[number]':page, 'page[size]':size});
-            return fetch(url, this.options.fetch)
-                .then(response => response.ok ? response.json() : Promise.reject(response))
-                .then(json => cache[type][size][page].sync(
-                {
-                    links: json.links || {},
-                    count: Object.keys(this.data(json)).length,
-                    model: this.sync(json)
-                }))
-        }
+    		if (typeof id == 'object')
+    		{
+    			query = id;
+    			id = query.id;
+    		}
 
-        post(type, data)
-        {
-            let options = Object.create(this.options.fetch);
-            options.method = 'POST';
+    		if (this._model[type])
+    		{
+    			if (id != undefined && this._model[type][id])
+    			{
+    				return Promise.resolve(this._model[type][id])
+    			}
+    			else if (id == undefined && Object.keys(query).length == 0)
+    			{
+    				return Promise.resolve(this._model[type])
+    			}
+    			else if (id == undefined)
+    			{
+    				query.type = type;
+    				let search = this.search(query);
+    				if (Object.keys(search).length)
+    				{
+    					return Promise.resolve(search)
+    				}
+    			}
+    		}
 
-            type = type || this.type(data);
-            let url = this.url({type:type, id:this.id(data)});
+    		Object.assign(query, { type: type, id: id });
+    		let url = this.url(query);
+    		return fetch(url, this.options.fetch)
+    			.then(response => response.ok ? response.json() : Promise.reject(response))
+    			.then((json) => this.sync(json))
+    			.catch((error) =>
+    			{
+    				if (this.options.triggerChangesOnError) this.model(type).triggerChanges();
+    				return Promise.reject(error)
+    			})
+    	}
 
-            return fetch(url, options)
-                .then(response => response.json())
-                .then((json) => this.sync(json))
-        }
+    	page(type, page = 1, size = 0)
+    	{
+    		size = parseInt(size) || this.options.per_page;
+    		page = parseInt(page) || 1;
 
-        patch(type, data)
-        {
-            let options = Object.create(this.options.fetch);
-            options.method = 'PATCH';
-            options.body = this.body(data);
+    		let cache = this._model._paging;
 
-            type = type || this.type(data);
-            let url = this.url({type:type, id:this.id(data)});
-            return fetch(url, options)
-                .then(response => response.json())
-                .then((json) => this.sync(json))
-        }
+    		if ((type in cache) && (size in cache[type]) && (page in cache[type][size]))
+    		{
+    			return Promise.resolve().then(() => cache[type][size][page])
+    		}
+    		else
+    		{
+    			if (!(type in cache)) cache[type] = {};
+    			if (!(size in cache[type])) cache[type][size] = {};
+    			if (!(page in cache[type][size])) cache[type][size][page] = new Model({
+    				type: type,
+    				number: page,
+    				size: size,
+    				count: 0,
+    				links: {},
+    				model: new Model()
+    			});
+    		}
 
-        delete(type, id)
-        {
-            let options = Object.create(this.options.fetch);
-            options.method = 'DELETE';
+    		let url = this.url({ type: type, 'page[number]': page, 'page[size]': size });
+    		return fetch(url, this.options.fetch)
+    			.then(response => response.ok ? response.json() : Promise.reject(response))
+    			.then(json => cache[type][size][page].sync(
+    				{
+    					links: json.links || {},
+    					count: Object.keys(this.data(json)).length,
+    					model: this.sync(json)
+    				}))
+    	}
 
-            let url = this.url({ type: type, id: id });
+    	post(type, data)
+    	{
+    		let options = Object.create(this.options.fetch);
+    		options.method = 'POST';
 
-            if (this.options.verbose)
-                console.info('Store.delete()', type, id, { store: this, url: url, options: options });
+    		type = type || this.type(data);
+    		let url = this.url({ type: type, id: this.id(data) });
 
-            return fetch(url, options)
-                .then(response => response.ok ? response.json() : Promise.reject(response))
-                .then(json => { delete this._cache[type][id]; return json } )
-        }
+    		return fetch(url, options)
+    			.then(response => response.json())
+    			.then((json) => this.sync(json))
+    	}
+
+    	patch(type, data)
+    	{
+    		let options = Object.create(this.options.fetch);
+    		options.method = 'PATCH';
+    		options.body = this.body(data);
+
+    		type = type || this.type(data);
+    		let url = this.url({ type: type, id: this.id(data) });
+    		return fetch(url, options)
+    			.then(response => response.json())
+    			.then((json) => this.sync(json))
+    	}
+
+    	delete(type, id)
+    	{
+    		let options = Object.create(this.options.fetch);
+    		options.method = 'DELETE';
+
+    		let url = this.url({ type: type, id: id });
+
+    		if (this.options.verbose)
+    			console.info('Store.delete()', type, id, { store: this, url: url, options: options });
+
+    		return fetch(url, options)
+    			.then(response => response.ok ? response.json() : Promise.reject(response))
+    			.then(json => { delete this._model[type][id]; return json })
+    	}
+
+    	static cache(store)
+    	{
+    		if (store == undefined)
+    			return _cache$1
+
+    		if ('string' == typeof store)
+    		{
+    			store = store.toLowerCase();
+    			if ( _cache$1[store] != undefined )
+    				return _cache$1[store]
+
+    			// Find a store that starts with the requested url to match ('/api/v1/entity' with a '/api/v1' store)
+    			for (var i in _cache$1)
+    			{
+    				if (i.startsWith(store))
+    					return _cache$1[i]
+    			}
+
+    			return undefined
+    		}
+
+    		var baseUrl = store.options.baseUrl.toLowerCase();
+
+    		if (baseUrl in _cache$1)
+    			return this
+
+    		_cache$1[baseUrl] = store;
+    		return this
+    	}
     }
+
+    let _cache$1 = {};
 
     class StoreJsonApi extends Store
     {
@@ -1284,20 +1365,20 @@ var ActionUI = (function (exports) {
 
             if ('string' == typeof view)
             {
-                return _cache$1[view]
+                return _cache$2[view]
             }
             else if ( view instanceof View )
             {
-                if (view.name in _cache$1)
+                if (view.name in _cache$2)
                 {
                     throw 'View name already exists: "' + view.name + '"'
                 }
 
-                _cache$1[view.name] = view;
+                _cache$2[view.name] = view;
                 return this
             }
 
-            return _cache$1
+            return _cache$2
         }
 
         // Render all views
@@ -1308,7 +1389,7 @@ var ActionUI = (function (exports) {
         // #endregion
     }
 
-    let _cache$1 = {};
+    let _cache$2 = {};
     let _options$1 = {
         verbose: false,
         autoCache: true, // Automatically cache views when created
@@ -1521,15 +1602,15 @@ var ActionUI = (function (exports) {
                 pathMethod = route == '/' ? _options$4.defaultMethod : path[0];
             }
             
-            if (! _cache$2[controller])
+            if (! _cache$3[controller])
             {
                 if ( this.controllers[controller] )
                 {
-                    _cache$2[controller] = new this.controllers[controller](this.view);
+                    _cache$3[controller] = new this.controllers[controller](this.view);
                 }
                 else
                 {
-                    _cache$2[controller] = new Controller(this.view);
+                    _cache$3[controller] = new Controller(this.view);
                 }
             }
             
@@ -1538,16 +1619,16 @@ var ActionUI = (function (exports) {
             let view = pathController + _options$4.pathSeparator + pathMethod;
             let method = camelCase(pathMethod);
 
-            if ( _cache$2[controller].view instanceof ViewFile)
+            if ( _cache$3[controller].view instanceof ViewFile)
             {
-                _cache$2[controller].view.file = view;
+                _cache$3[controller].view.file = view;
             }
-            else if ( _cache$2[controller].view instanceof ViewHandlebars)
+            else if ( _cache$3[controller].view instanceof ViewHandlebars)
             {
-                _cache$2[controller].view.html = view;
+                _cache$3[controller].view.html = view;
             }
 
-            if (_options$4.autoload && ! (_cache$2[controller][method] instanceof Function))
+            if (_options$4.autoload && ! (_cache$3[controller][method] instanceof Function))
             {
                 method = _options$4.autoloadMethod;
             }
@@ -1592,18 +1673,18 @@ var ActionUI = (function (exports) {
                         args.push(model);
 
                         result = match.callback
-                            .apply(_cache$2[controller], args);
+                            .apply(_cache$3[controller], args);
                     }
                 }
                 else
                 {
-                    _cache$2[controller].view.model
+                    _cache$3[controller].view.model
                         .clear()
                         .sync(model)
                         .clearChanges();
 
-                    result = _cache$2[controller][method]
-                        .apply(_cache$2[controller], args);
+                    result = _cache$3[controller][method]
+                        .apply(_cache$3[controller], args);
                     
                     this.pushState(route, {
                         controller: pathController,
@@ -1669,17 +1750,17 @@ var ActionUI = (function (exports) {
             model.view = model.controller + _options$4.pathSeparator + _options$4.errorView;
             model.path = path.join(_options$4.pathSeparator);
 
-            if ( _cache$2[controller].view instanceof ViewFile)
+            if ( _cache$3[controller].view instanceof ViewFile)
             {
-                _cache$2[controller].view.file = (_options$4.useControllerErrorViews ? model.controller + _options$4.pathSeparator : '') + _options$4.errorView;
+                _cache$3[controller].view.file = (_options$4.useControllerErrorViews ? model.controller + _options$4.pathSeparator : '') + _options$4.errorView;
             }
             else
             {
-                _cache$2[controller].view.html = 'Error loading ' + model.path;
+                _cache$3[controller].view.html = 'Error loading ' + model.path;
             }
 
-            _cache$2[controller].view.model.clear().sync(model).clearChanges();
-            return _cache$2[controller][_options$4.errorMethod]()
+            _cache$3[controller].view.model.clear().sync(model).clearChanges();
+            return _cache$3[controller][_options$4.errorMethod]()
         }
 
         static sanitizePath(path)
@@ -1766,7 +1847,7 @@ var ActionUI = (function (exports) {
         // #endregion
     }
 
-    let _cache$2 = {};
+    let _cache$3 = {};
     let _options$4 = {
         controllers: {},
         view: 'controller',
