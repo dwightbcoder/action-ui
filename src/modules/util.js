@@ -10,16 +10,16 @@ function deepAssign(target, source, dereference = false)
 		source = Object.assign({}, source)
 	}
 
-    for (let i in source)
-    {
-        if (source.hasOwnProperty(i))
+	for (let i in source)
+	{
+		if (source.hasOwnProperty(i))
 		{
 			if (dereference && source[i] instanceof Object)
 			{
 				source[i] = Object.assign({}, source[i])
 			}
 
-            if (target.hasOwnProperty(i))
+			if (target.hasOwnProperty(i))
 			{
 				if (dereference && target[i] instanceof Object)
 				{
@@ -29,17 +29,17 @@ function deepAssign(target, source, dereference = false)
 				if (target[i] instanceof Object && source[i] instanceof Object && !(target[i] instanceof Function || source[i] instanceof Function))
 				{
 					deepAssign(target[i], source[i])
-                }
-                else if (target[i] != source[i])
-                {
-                    target[i] = source[i]
-                }
-            }
-            else
-            {
-                target[i] = source[i]
-            }
-        }
+				}
+				else if (target[i] != source[i])
+				{
+					target[i] = source[i]
+				}
+			}
+			else
+			{
+				target[i] = source[i]
+			}
+		}
 	}
 
 	return target // For simpler dereference usage
@@ -52,81 +52,81 @@ function deepCopy(target, source)
 
 function requestFromElement(element)
 {
-    return new Request(
-        element.action || options.href || null,
-        {
-            method: element.method || null
-        }
-    )
+	return new Request(
+		element.action || options.href || null,
+		{
+			method: element.method || null
+		}
+	)
 }
 
 function form(element)
 {
-    return element.tagName == 'FORM' ? element : element.form
+	return element.tagName == 'FORM' ? element : element.form
 }
 
 function capitalize(str)
 {
-    return str[0].toUpperCase() + str.substr(1).toLowerCase()
+	return str[0].toUpperCase() + str.substr(1).toLowerCase()
 }
 
 function camelCase(str)
 {
-    return str.toLowerCase().replace(/[^a-zA-Z0-9]+(.)/g, (_match, chr) => chr.toUpperCase())
+	return str.toLowerCase().replace(/[^a-zA-Z0-9]+(.)/g, (_match, chr) => chr.toUpperCase())
 }
 
-function firstMatchingParentElement( element, selector )
+function firstMatchingParentElement(element, selector)
 {
-    if ( element == null || element.matches(selector) )
-    {
-        return element
-    }
+	if (element == null || element.matches(selector))
+	{
+		return element
+	}
 
-    return firstMatchingParentElement(element.parentElement, selector)
+	return firstMatchingParentElement(element.parentElement, selector)
 }
 
 function formToObject(form, data = {})
 {
-    data = Object.assign(Object.fromEntries((new FormData(form))), data)
+	data = Object.assign(Object.fromEntries((new FormData(form))), data)
 
-    Object.entries(data).map(entry =>
-    {
-        const keys = entry[0].split('[').map(key => key.replace(/]/g, ''))
+	Object.entries(data).map(entry =>
+	{
+		const keys = entry[0].split('[').map(key => key.replace(/]/g, ''))
 
-        if (keys.length > 1)
-        {
-            const obj = remapObjectKeys(keys, entry[1])
-            Util.deepAssign(data, obj)
-            delete data[entry[0]]
-        }
+		if (keys.length > 1)
+		{
+			const obj = remapObjectKeys(keys, entry[1])
+			Util.deepAssign(data, obj)
+			delete data[entry[0]]
+		}
 
-        return entry
-    })
+		return entry
+	})
 
-    return data
+	return data
 }
 
 function remapObjectKeys(keys, val, obj)
 {
-    const key = keys.pop()
+	const key = keys.pop()
 
-    if (!key)
-    {
-        return obj
-    }
+	if (!key)
+	{
+		return obj
+	}
 
-    let newObj = {}
+	let newObj = {}
 
-    if (!obj)
-    {
-        newObj[key] = val
-    }
-    else
-    {
-        newObj[key] = obj
-    }
+	if (!obj)
+	{
+		newObj[key] = val
+	}
+	else
+	{
+		newObj[key] = obj
+	}
 
-    return remapObjectKeys(keys, val, newObj)
+	return remapObjectKeys(keys, val, newObj)
 }
 
-export { deepAssign, requestFromElement, form, capitalize, camelCase, firstMatchingParentElement, formToObject }
+export { deepAssign, deepCopy, requestFromElement, form, capitalize, camelCase, firstMatchingParentElement, formToObject }

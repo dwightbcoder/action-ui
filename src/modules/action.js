@@ -153,7 +153,7 @@ class Action
 
 			if (target && target.tagName != 'FORM')
 			{
-				if (!(target.tagName == 'INPUT' && target.type == 'checkbox'))
+				if (!(target.tagName == 'INPUT' && (target.type == 'checkbox' || target.type == 'radio')))
 					e.preventDefault()
 				var actionName = target.getAttribute('ui-action')
 
