@@ -65,6 +65,10 @@ var ActionUI = function (exports) {
     return target; // For simpler dereference usage
   }
 
+  function deepCopy(target, source) {
+    return deepAssign(target, source, true);
+  }
+
   function requestFromElement(element) {
     return new Request(element.action || options.href || null, {
       method: element.method || null
@@ -133,6 +137,7 @@ var ActionUI = function (exports) {
   var util = /*#__PURE__*/Object.freeze({
     __proto__: null,
     deepAssign: deepAssign,
+    deepCopy: deepCopy,
     requestFromElement: requestFromElement,
     form: form,
     capitalize: capitalize,
@@ -498,7 +503,7 @@ var ActionUI = function (exports) {
           var target = firstMatchingParentElement(e.target, '[ui-action]');
 
           if (target && target.tagName != 'FORM') {
-            if (!(target.tagName == 'INPUT' && target.type == 'checkbox')) e.preventDefault();
+            if (!(target.tagName == 'INPUT' && (target.type == 'checkbox' || target.type == 'radio'))) e.preventDefault();
             var actionName = target.getAttribute('ui-action'); // Don't run the action if it's already running
 
             if (actionName in _cache) {
@@ -1016,7 +1021,7 @@ var ActionUI = function (exports) {
       }
     }, {
       key: "sync",
-      value: function sync(json) {
+      value: function sync(json, url) {
         var data = this.data(json);
 
         if (!data) {
@@ -1036,7 +1041,7 @@ var ActionUI = function (exports) {
               _data = data[i];
             }
 
-            _collection[this.id(data[i])] = this.sync(_data);
+            _collection[this.id(data[i])] = this.sync(_data, url);
           }
 
           return _collection;
@@ -1055,6 +1060,20 @@ var ActionUI = function (exports) {
 
         this._model[type][id].sync(data);
 
+        if (url) // Request URL tracking
+          {
+            if (!this._model[type][id].hasOwnProperty('_store')) this._model[type][id]._store = {
+              url: []
+            };
+            if (this._model[type][id]._store.url.indexOf(url) == -1) this._model[type][id]._store.url.push(url);
+            url = this.url({
+              type: type,
+              id: id
+            }); // Add direct link if not present
+
+            if (this._model[type][id]._store.url.indexOf(url) == -1) this._model[type][id]._store.url.push(url);
+          }
+
         return this._model[type][id];
       }
     }, {
@@ -1062,17 +1081,17 @@ var ActionUI = function (exports) {
       value: function url(options) {
         var type = this.options.types[options.type] || options.type;
         var url = this.options.baseUrl + '/' + type + '/' + (options.id ? options.id + '/' : '');
-        var query = [];
+        var searchParams = new URLSearchParams();
 
         for (var i in options) {
           if (i in this.options.query) {
-            query.push(this.options.query[i] + '=' + options[i]);
+            searchParams.set(this.options.query[i], options[i]);
           } else if (i != 'type' && i != 'id') {
-            query.push(i + '=' + options[i]);
+            searchParams.set(i, options[i]);
           }
         }
 
-        var qs = query.join('&');
+        var qs = searchParams.toString();
 
         if (qs) {
           url += '?' + qs;
@@ -1135,13 +1154,18 @@ var ActionUI = function (exports) {
           id = query.id;
         }
 
+        Object.assign(query, {
+          type: type,
+          id: id
+        });
+        var url = this.url(query);
+
         if (this._model[type]) {
-          if (id != undefined && this._model[type][id]) {
+          if (id != undefined && this._model[type][id] && !(this._model[type][id].hasOwnProperty('_store') && this._model[type][id]._store.url.indexOf(url) == -1)) {
             return Promise.resolve(this._model[type][id]);
           } else if (id == undefined && Object.keys(query).length == 0) {
             return Promise.resolve(this._model[type]);
           } else if (id == undefined) {
-            query.type = type;
             var search = this.search(query);
 
             if (Object.keys(search).length) {
@@ -1150,15 +1174,10 @@ var ActionUI = function (exports) {
           }
         }
 
-        Object.assign(query, {
-          type: type,
-          id: id
-        });
-        var url = this.url(query);
         return fetch(url, this.options.fetch).then(function (response) {
           return response.ok ? response.json() : Promise.reject(response);
         }).then(function (json) {
-          return _this6.sync(json);
+          return _this6.sync(json, url);
         }).catch(function (error) {
           if (_this6.options.triggerChangesOnError) _this6.model(type).triggerChanges();
           return Promise.reject(error);
@@ -1327,17 +1346,17 @@ var ActionUI = function (exports) {
 
     _createClass(StoreJsonApi, [{
       key: "sync",
-      value: function sync(json) {
+      value: function sync(json, url) {
         if (json['included']) {
           var _keyData = this.options.keys.data;
           this.options.keys.data = 'included';
 
-          _get(_getPrototypeOf(StoreJsonApi.prototype), "sync", this).call(this, json);
+          _get(_getPrototypeOf(StoreJsonApi.prototype), "sync", this).call(this, json, url);
 
           this.options.keys.data = _keyData;
         }
 
-        return _get(_getPrototypeOf(StoreJsonApi.prototype), "sync", this).call(this, json);
+        return _get(_getPrototypeOf(StoreJsonApi.prototype), "sync", this).call(this, json, url);
       }
     }, {
       key: "body",

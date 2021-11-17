@@ -25,22 +25,21 @@ class StoreJsonApi extends Store
         super(_options)
     }
 
-    sync(json)
+    sync(json, url)
     {
         if (json['included'])
         {
             let _keyData = this.options.keys.data
             this.options.keys.data = 'included'
-            super.sync(json)
+            super.sync(json, url)
             this.options.keys.data = _keyData
         }
 
-        return super.sync(json)
+        return super.sync(json, url)
     }
 
-    body(data)
-    {
-        return JSON.stringify({data})
+    body(data) {
+        return JSON.stringify({ data })
     }
 
 }

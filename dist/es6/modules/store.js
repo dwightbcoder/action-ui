@@ -99,7 +99,7 @@ class Store
 			this.actionCreate(type, 'post')
 			this.actionCreate(type, 'patch')
 			this.actionCreate(type, 'delete')
-			
+
 			if (this.options.viewClass && this.options.viewMap.hasOwnProperty(type))
 			{
 				new this.options.viewClass(this.options.viewMap[type], this._model[type])
@@ -144,7 +144,7 @@ class Store
 		return json[this.options.keys.id]
 	}
 
-	sync(json)
+	sync(json, url)
 	{
 		let data = this.data(json)
 
@@ -171,7 +171,7 @@ class Store
 					_data = data[i]
 				}
 
-				_collection[this.id(data[i])] = this.sync(_data)
+				_collection[this.id(data[i])] = this.sync(_data, url)
 			}
 
 			return _collection
@@ -191,6 +191,20 @@ class Store
 		}
 
 		this._model[type][id].sync(data)
+
+		if (url) // Request URL tracking
+		{
+			if (!this._model[type][id].hasOwnProperty('_store'))
+				this._model[type][id]._store = { url: [] }
+			
+			if (this._model[type][id]._store.url.indexOf(url) == -1)
+				this._model[type][id]._store.url.push(url)
+
+			url = this.url({ type: type, id: id }) // Add direct link if not present
+			if (this._model[type][id]._store.url.indexOf(url) == -1)
+				this._model[type][id]._store.url.push(url)
+		}
+
 		return this._model[type][id]
 	}
 
@@ -198,21 +212,21 @@ class Store
 	{
 		let type = this.options.types[options.type] || options.type
 		let url = this.options.baseUrl + '/' + type + '/' + (options.id ? options.id + '/' : '')
-		let query = []
+		let searchParams = new URLSearchParams()
 
 		for (let i in options)
 		{
 			if (i in this.options.query)
 			{
-				query.push(this.options.query[i] + '=' + options[i])
+				searchParams.set(this.options.query[i], options[i])
 			}
 			else if (i != 'type' && i != 'id')
 			{
-				query.push(i + '=' + options[i])
+				searchParams.set(i, options[i])
 			}
 		}
 
-		let qs = query.join('&')
+		let qs = searchParams.toString()
 		if (qs)
 		{
 			url += '?' + qs
@@ -262,9 +276,12 @@ class Store
 			id = query.id
 		}
 
+		Object.assign(query, { type: type, id: id })
+		let url = this.url(query)
+
 		if (this._model[type])
 		{
-			if (id != undefined && this._model[type][id])
+			if (id != undefined && this._model[type][id] && !(this._model[type][id].hasOwnProperty('_store') && this._model[type][id]._store.url.indexOf(url) == -1))
 			{
 				return Promise.resolve(this._model[type][id])
 			}
@@ -274,7 +291,6 @@ class Store
 			}
 			else if (id == undefined)
 			{
-				query.type = type
 				let search = this.search(query)
 				if (Object.keys(search).length)
 				{
@@ -283,11 +299,9 @@ class Store
 			}
 		}
 
-		Object.assign(query, { type: type, id: id })
-		let url = this.url(query)
 		return fetch(url, this.options.fetch)
 			.then(response => response.ok ? response.json() : Promise.reject(response))
-			.then((json) => this.sync(json))
+			.then((json) => this.sync(json, url))
 			.catch((error) =>
 			{
 				if (this.options.triggerChangesOnError) this.model(type).triggerChanges()
@@ -380,7 +394,7 @@ class Store
 		if ('string' == typeof store)
 		{
 			store = store.toLowerCase()
-			if ( _cache[store] != undefined )
+			if (_cache[store] != undefined)
 				return _cache[store]
 
 			// Find a store that starts with the requested url to match ('/api/v1/entity' with a '/api/v1' store)
