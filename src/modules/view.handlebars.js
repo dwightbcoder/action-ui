@@ -12,7 +12,7 @@ class ViewHandlebars extends ViewFile
     {
         if ( this.constructor.options.verbose ) console.info( this.constructor.name + '.render()', this.name, {view:this} )
 
-        var _promise = _promise = Promise.resolve()
+        var _promise = Promise.resolve()
 
         if (this.html == null && Handlebars.templates && Handlebars.templates[this.file])
         {
