@@ -1662,6 +1662,7 @@ var ActionUI = function (exports) {
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.fetch()', this.name, {
           view: this
         });
+        this.fetchBefore();
         return fetch(this.fullPath).then(function (response) {
           if (response.ok) {
             return response.text();
@@ -1669,11 +1670,57 @@ var ActionUI = function (exports) {
             throw new Error(response.statusText);
           }
         }).then(function (html) {
-          return _this16._html = html;
+          _this16._html = html;
+
+          _this16.fetchAfter(true);
+
+          return _this16._html;
         }).catch(function (e) {
+          _this16.fetchAfter(false);
+
           throw new Error('File not found: ' + _this16.fileName);
         });
       })
+    }, {
+      key: "fetchBefore",
+      value: function fetchBefore() {
+        var _this17 = this;
+
+        if (this.constructor.options.verbose) console.info(this.constructor.name + '.fetchBefore()', this.name, {
+          view: this
+        });
+        document.querySelectorAll('[ui-view="' + this._name + '"]').forEach(function (target) {
+          _this17.constructor.setCssClass(target, _options$2.cssClass.loading);
+        });
+
+        if (this.constructor.options.eventFetch) {
+          Object.assign(this.constructor.options.eventFetch.detail, {
+            view: this,
+            success: null
+          });
+          document.dispatchEvent(this.constructor.options.eventFetch);
+        }
+      }
+    }, {
+      key: "fetchAfter",
+      value: function fetchAfter(success) {
+        var _this18 = this;
+
+        if (this.constructor.options.verbose) console.info(this.constructor.name + '.fetchAfter()', this.name, {
+          view: this
+        });
+        document.querySelectorAll('[ui-view="' + this._name + '"]').forEach(function (target) {
+          _this18.constructor.setCssClass(target, success ? _options$2.cssClass.success : _options$2.cssClass.fail);
+        });
+
+        if (this.constructor.options.eventFetch) {
+          Object.assign(this.constructor.options.eventFetch.detail, {
+            view: this,
+            success: success
+          });
+          document.dispatchEvent(this.constructor.options.eventFetch);
+        }
+      }
     }, {
       key: "fileName",
       get: function get() {
@@ -1712,6 +1759,15 @@ var ActionUI = function (exports) {
         return new this(options.name, options.file, options.model);
       }
     }, {
+      key: "setCssClass",
+      value: function setCssClass(target, cssClass) {
+        for (var i in _options$2.cssClass) {
+          target.classList.remove(_options$2.cssClass[i]);
+        }
+
+        target.classList.add(cssClass);
+      }
+    }, {
       key: "options",
       get: function get() {
         return _options$2;
@@ -1727,7 +1783,27 @@ var ActionUI = function (exports) {
 
   var _options$2 = {
     basePath: 'view/',
-    extension: 'html'
+    extension: 'html',
+    cssClass: {
+      'loading': 'loading',
+      'success': 'success',
+      'fail': 'fail'
+    },
+    eventFetch: new CustomEvent('view.fetch', {
+      bubbles: true,
+      detail: {
+        type: 'fetch',
+        view: null,
+        success: null
+      }
+    }),
+    eventRender: new CustomEvent('view.render', {
+      bubbles: true,
+      detail: {
+        type: 'render',
+        view: null
+      }
+    })
   };
   ViewFile.options = View.options;
   /**
@@ -1750,31 +1826,31 @@ var ActionUI = function (exports) {
     _createClass(ViewHandlebars, [{
       key: "render",
       value: function render() {
-        var _this17 = this;
+        var _this19 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
           view: this
         });
 
-        var _promise = _promise = Promise.resolve();
+        var _promise = Promise.resolve();
 
         if (this.html == null && Handlebars.templates && Handlebars.templates[this.file]) {
           this.html = Handlebars.templates[this.file];
         }
 
         return _promise.then(function () {
-          return _get(_getPrototypeOf(ViewHandlebars.prototype), "render", _this17).call(_this17);
+          return _get(_getPrototypeOf(ViewHandlebars.prototype), "render", _this19).call(_this19);
         });
       }
     }, {
       key: "fetch",
       value: function fetch() {
-        var _this18 = this;
+        var _this20 = this;
 
         return _get(_getPrototypeOf(ViewHandlebars.prototype), "fetch", this).call(this).then(function (html) {
           if (!('templates' in Handlebars)) Handlebars.templates = [];
-          Handlebars.templates[_this18.file] = Handlebars.compile(html);
-          _this18.html = Handlebars.templates[_this18.file];
+          Handlebars.templates[_this20.file] = Handlebars.compile(html);
+          _this20.html = Handlebars.templates[_this20.file];
           return html;
         });
       } // #region Static methods
@@ -1855,7 +1931,7 @@ var ActionUI = function (exports) {
     }, {
       key: "navigate",
       value: function navigate(route) {
-        var _this19 = this;
+        var _this21 = this;
 
         var data = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
         var event = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : null;
@@ -1966,11 +2042,11 @@ var ActionUI = function (exports) {
           var viewContainer = document.querySelectorAll('[ui-view="' + this.view.name + '"]');
           this.handleLoading(viewContainer, true);
           result.then(function () {
-            return _this19.handleLoading(viewContainer, false);
+            return _this21.handleLoading(viewContainer, false);
           }).catch(function (e) {
-            _this19.handleLoading(viewContainer, false);
+            _this21.handleLoading(viewContainer, false);
 
-            _this19.handleError(controller, model, path, e);
+            _this21.handleError(controller, model, path, e);
 
             throw e;
           });

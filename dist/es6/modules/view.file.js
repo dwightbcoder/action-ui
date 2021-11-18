@@ -7,85 +7,150 @@ import { deepAssign } from './util.js'
  */
 class ViewFile extends View
 {
-    constructor(name, file, model)
-    {
-        if (arguments.length == 2)
-        {
-            model = file
-            file = undefined
-        }
+	constructor(name, file, model)
+	{
+		if (arguments.length == 2)
+		{
+			model = file
+			file = undefined
+		}
 
-        if (!file)
-        {
-            file = name
-        }
+		if (!file)
+		{
+			file = name
+		}
 
-        super(name, null, model)
+		super(name, null, model)
 
-        this.file = file
-    }
+		this.file = file
+	}
 
-    clear()
-    {
-        this.html = null
-        return super.clear()
-    }
+	clear()
+	{
+		this.html = null
+		return super.clear()
+	}
 
-    render()
-    {
-        if ( this.constructor.options.verbose ) console.info( this.constructor.name + '.render()', this.name, {view:this} )
+	render()
+	{
+		if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, { view: this })
 
-        var _promise = this._html == null ? this.fetch() : Promise.resolve()
-        return _promise.then(() => super.render())
-    }
+		var _promise = this._html == null ? this.fetch() : Promise.resolve()
+		return _promise.then(() => super.render())
+	}
 
-    fetch()
-    {
-        if ( this.constructor.options.verbose ) console.info( this.constructor.name + '.fetch()', this.name, {view:this} )
+	fetch()
+	{
+		if (this.constructor.options.verbose) console.info(this.constructor.name + '.fetch()', this.name, { view: this })
 
-        return fetch(this.fullPath)
-            .then(response => {if (response.ok) { return response.text() } else { throw new Error(response.statusText) }})
-            .then(html => this._html = html)
-            .catch(e => { throw new Error('File not found: ' + this.fileName) })
-    }
+		this.fetchBefore()
 
-    get fileName() { return this.file + '.' + this.constructor.options.extension }
-    get fullPath() { return this.constructor.options.basePath + this.fileName }
+		return fetch(this.fullPath)
+			.then(response => { if (response.ok) { return response.text() } else { throw new Error(response.statusText) } })
+			.then(html =>
+			{
+				this._html = html
+				this.fetchAfter(true)
+				return this._html
+			})
+			.catch(e =>
+			{
+				this.fetchAfter(false);
+				throw new Error('File not found: ' + this.fileName)
+			})
+	}
 
-    get file() { return this._file }
-    set file(file)
-    {
-        if ( file != this._file )
-        {
-            this._html = null
-        }
-        this._file = file
-    }
+	fetchBefore()
+	{
 
-    // #region Static methods
+		if (this.constructor.options.verbose) console.info(this.constructor.name + '.fetchBefore()', this.name, { view: this })
 
-    // View factory
-    static create(options)
-    {
-        if ( this.options.verbose ) console.info( this.name + ':create()', {options:options} )
+		document
+			.querySelectorAll('[ui-view="' + this._name + '"]')
+			.forEach(target =>
+			{
+				this.constructor.setCssClass(target, _options.cssClass.loading)
+			})
 
-        if ( options.file )
-        {
-            options.file = options.name
-        }
+		if (this.constructor.options.eventFetch)
+		{
+			Object.assign(this.constructor.options.eventFetch.detail, {
+				view: this,
+				success: null
+			})
 
-        return new this(options.name, options.file, options.model)
-    }
+			document.dispatchEvent(this.constructor.options.eventFetch)
+		}
+	}
 
-    static get options() { return _options }
-    static set options(value) { deepAssign(_options, value) }
+	fetchAfter(success)
+	{
+		if (this.constructor.options.verbose) console.info(this.constructor.name + '.fetchAfter()', this.name, { view: this })
 
-    // #endregion
+		document
+			.querySelectorAll('[ui-view="' + this._name + '"]')
+			.forEach(target =>
+			{
+				this.constructor.setCssClass(target, success ? _options.cssClass.success : _options.cssClass.fail)
+			})
+
+		if (this.constructor.options.eventFetch)
+		{
+			Object.assign(this.constructor.options.eventFetch.detail, {
+				view: this,
+				success: success
+			})
+
+			document.dispatchEvent(this.constructor.options.eventFetch)
+		}
+	}
+
+	get fileName() { return this.file + '.' + this.constructor.options.extension }
+	get fullPath() { return this.constructor.options.basePath + this.fileName }
+
+	get file() { return this._file }
+	set file(file)
+	{
+		if (file != this._file)
+		{
+			this._html = null
+		}
+		this._file = file
+	}
+
+	// #region Static methods
+
+	// View factory
+	static create(options)
+	{
+		if (this.options.verbose) console.info(this.name + ':create()', { options: options })
+
+		if (options.file)
+		{
+			options.file = options.name
+		}
+
+		return new this(options.name, options.file, options.model)
+	}
+
+	static setCssClass(target, cssClass)
+	{
+		for (var i in _options.cssClass) target.classList.remove(_options.cssClass[i])
+		target.classList.add(cssClass)
+	}
+
+	static get options() { return _options }
+	static set options(value) { deepAssign(_options, value) }
+
+	// #endregion
 }
 
 let _options = {
-    basePath: 'view/',
-    extension: 'html'
+	basePath: 'view/',
+	extension: 'html',
+	cssClass: { 'loading': 'loading', 'success': 'success', 'fail': 'fail' },
+	eventFetch: new CustomEvent('view.fetch', { bubbles: true, detail: { type: 'fetch', view: null, success: null } }),
+	eventRender: new CustomEvent('view.render', { bubbles: true, detail: { type: 'render', view: null } })
 }
 ViewFile.options = View.options
 
