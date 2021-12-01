@@ -41,10 +41,10 @@ class Store
 				'delete': 'delete'
 			},
 			'actionHandler': {
-				'get': function (type, method, resolve, reject, data) { this.fetch(type, data.id).then(json => resolve(json)).catch(response => response.json().then(json => reject(json))) },
-				'post': function (type, method, resolve, reject, data) { this.post(type, data).then(json => resolve(json)).catch(response => response.json().then(json => reject(json))) },
-				'patch': function (type, method, resolve, reject, data) { this.patch(type, data).then(json => resolve(json)).catch(response => response.json().then(json => reject(json))) },
-				'delete': function (type, method, resolve, reject, data) { this.delete(type, data.id).then(json => resolve(json)).catch(response => response.json().then(json => reject(json))) },
+				'get': this.actionHandler,
+				'post': this.actionHandler,
+				'patch': this.actionHandler,
+				'delete': this.actionHandler
 			}
 		}
 		Util.deepAssign(this.options, options || {})
@@ -121,6 +121,23 @@ class Store
 		var action = new Action(actionName, handler)
 		Action.cache(action)
 		return action
+	}
+
+	actionHandler(type, method, resolve, reject, data)
+	{
+		let promise = null
+
+		switch (method)
+		{
+			case 'get': promise = this.fetch(type, data.id); break
+			case 'post': promise = this.post(type, data); break
+			case 'patch': promuse = this.patch(type, data); break
+			case 'delete': promise = this.delete(type, data.id); break
+		}
+
+		return promise
+			.then(json => resolve(json))
+			.catch(error => reject(error))
 	}
 
 	data(json)
@@ -299,10 +316,13 @@ class Store
 			}
 		}
 
+		if (this.options.verbose)
+			console.info('Store.fetch()', type, id, { type: type, id: id, query: query, store: this, url: url, options: this.options.fetch })
+
 		return fetch(url, this.options.fetch)
-			.then(response => response.ok ? response.json() : Promise.reject(response))
-			.then((json) => this.sync(json, url))
-			.catch((error) =>
+			.then(response => response.json().then(json => response.ok ? json : Promise.reject(json)))
+			.then(json => this.sync(json, url))
+			.catch(error =>
 			{
 				if (this.options.triggerChangesOnError) this.model(type).triggerChanges()
 				return Promise.reject(error)
@@ -335,8 +355,12 @@ class Store
 		}
 
 		let url = this.url({ type: type, 'page[number]': page, 'page[size]': size })
+
+		if (this.options.verbose)
+			console.info('Store.page()', type, page, size, { type: type, page: page, size: size, store: this, url: url, options: options })
+
 		return fetch(url, this.options.fetch)
-			.then(response => response.ok ? response.json() : Promise.reject(response))
+			.then(response => response.json().then(json => response.ok ? json : Promise.reject(json)))
 			.then(json => cache[type][size][page].sync(
 				{
 					links: json.links || {},
@@ -353,9 +377,17 @@ class Store
 		type = type || this.type(data)
 		let url = this.url({ type: type, id: this.id(data) })
 
+		if (this.options.verbose)
+			console.info('Store.post()', type, { type: type, data: data, store: this, url: url, options: options })
+
 		return fetch(url, options)
-			.then(response => response.json())
-			.then((json) => this.sync(json))
+			.then(response => response.json().then(json => response.ok ? json : Promise.reject(json)))
+			.then(json => this.sync(json))
+			.catch(error =>
+			{
+				if (this.options.triggerChangesOnError) this.model(type).triggerChanges()
+				return Promise.reject(error)
+			})
 	}
 
 	patch(type, data)
@@ -366,9 +398,18 @@ class Store
 
 		type = type || this.type(data)
 		let url = this.url({ type: type, id: this.id(data) })
+
+		if (this.options.verbose)
+			console.info('Store.patch()', type, { type: type, data: data, store: this, url: url, options: options })
+
 		return fetch(url, options)
-			.then(response => response.json())
-			.then((json) => this.sync(json))
+			.then(response => response.json().then(json => response.ok ? json : Promise.reject(json)))
+			.then(json => this.sync(json))
+			.catch(error =>
+			{
+				if (this.options.triggerChangesOnError) this.model(type).triggerChanges()
+				return Promise.reject(error)
+			})
 	}
 
 	delete(type, id)
@@ -379,11 +420,16 @@ class Store
 		let url = this.url({ type: type, id: id })
 
 		if (this.options.verbose)
-			console.info('Store.delete()', type, id, { store: this, url: url, options: options })
+			console.info('Store.delete()', type, id, { type: type, id: id, store: this, url: url, options: options })
 
 		return fetch(url, options)
-			.then(response => response.ok ? response.json() : Promise.reject(response))
+			.then(response => response.json().then(json => response.ok ? json : Promise.reject(json)))
 			.then(json => { delete this._model[type][id]; return json })
+			.catch(error =>
+			{
+				if (this.options.triggerChangesOnError) this.model(type).triggerChanges()
+				return Promise.reject(error)
+			})
 	}
 
 	static cache(store)

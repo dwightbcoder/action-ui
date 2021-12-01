@@ -27,7 +27,6 @@ class Action
 
 		this.running = true
 		target = target || document.body
-		//target.setAttribute('disabled', 'disabled')
 		data = Object.assign(data, Action.data(target))
 		this.before(target, data)
 
@@ -67,7 +66,7 @@ class Action
 			}
 
 			promise = fetch(this.handler)
-				.then(response => response.json())
+				.then(response => response.json().then(json => response.ok ? json : Promise.reject(json)))
 		}
 
 		return promise
@@ -120,7 +119,6 @@ class Action
 		if (_options.verbose) console.info('Action.after()', this.name, { action: this, target: target, data: data, success: success, result: result })
 
 		this.running = false
-		//target.removeAttribute('disabled')
 		var cssClass = success ? _options.cssClass.success : _options.cssClass.fail
 		Action.setCssClass(target, cssClass)
 		Action.reflectCssClass(this.name, cssClass)

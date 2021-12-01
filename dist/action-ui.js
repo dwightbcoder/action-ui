@@ -1,6 +1,6 @@
 "use strict";
 
-function _get(target, property, receiver) { if (typeof Reflect !== "undefined" && Reflect.get) { _get = Reflect.get; } else { _get = function _get(target, property, receiver) { var base = _superPropBase(target, property); if (!base) return; var desc = Object.getOwnPropertyDescriptor(base, property); if (desc.get) { return desc.get.call(receiver); } return desc.value; }; } return _get(target, property, receiver || target); }
+function _get() { if (typeof Reflect !== "undefined" && Reflect.get) { _get = Reflect.get; } else { _get = function _get(target, property, receiver) { var base = _superPropBase(target, property); if (!base) return; var desc = Object.getOwnPropertyDescriptor(base, property); if (desc.get) { return desc.get.call(arguments.length < 3 ? target : receiver); } return desc.value; }; } return _get.apply(this, arguments); }
 
 function _superPropBase(object, property) { while (!Object.prototype.hasOwnProperty.call(object, property)) { object = _getPrototypeOf(object); if (object === null) break; } return object; }
 
@@ -371,8 +371,7 @@ var ActionUI = function (exports) {
           data: data
         });
         this.running = true;
-        target = target || document.body; //target.setAttribute('disabled', 'disabled')
-
+        target = target || document.body;
         data = Object.assign(data, Action.data(target));
         this.before(target, data);
         var promise = null;
@@ -413,7 +412,9 @@ var ActionUI = function (exports) {
           }
 
           promise = fetch(this.handler).then(function (response) {
-            return response.json();
+            return response.json().then(function (json) {
+              return response.ok ? json : Promise.reject(json);
+            });
           });
         }
 
@@ -474,8 +475,7 @@ var ActionUI = function (exports) {
           success: success,
           result: result
         });
-        this.running = false; //target.removeAttribute('disabled')
-
+        this.running = false;
         var cssClass = success ? _options.cssClass.success : _options.cssClass.fail;
         Action.setCssClass(target, cssClass);
         Action.reflectCssClass(this.name, cssClass);
@@ -889,42 +889,10 @@ var ActionUI = function (exports) {
           'delete': 'delete'
         },
         'actionHandler': {
-          'get': function get(type, method, resolve, reject, data) {
-            this.fetch(type, data.id).then(function (json) {
-              return resolve(json);
-            }).catch(function (response) {
-              return response.json().then(function (json) {
-                return reject(json);
-              });
-            });
-          },
-          'post': function post(type, method, resolve, reject, data) {
-            this.post(type, data).then(function (json) {
-              return resolve(json);
-            }).catch(function (response) {
-              return response.json().then(function (json) {
-                return reject(json);
-              });
-            });
-          },
-          'patch': function patch(type, method, resolve, reject, data) {
-            this.patch(type, data).then(function (json) {
-              return resolve(json);
-            }).catch(function (response) {
-              return response.json().then(function (json) {
-                return reject(json);
-              });
-            });
-          },
-          'delete': function _delete(type, method, resolve, reject, data) {
-            this.delete(type, data.id).then(function (json) {
-              return resolve(json);
-            }).catch(function (response) {
-              return response.json().then(function (json) {
-                return reject(json);
-              });
-            });
-          }
+          'get': this.actionHandler,
+          'post': this.actionHandler,
+          'patch': this.actionHandler,
+          'delete': this.actionHandler
         }
       };
       deepAssign(this.options, options || {});
@@ -997,6 +965,35 @@ var ActionUI = function (exports) {
         var action = new Action(actionName, handler);
         Action.cache(action);
         return action;
+      }
+    }, {
+      key: "actionHandler",
+      value: function actionHandler(type, method, resolve, reject, data) {
+        var promise = null;
+
+        switch (method) {
+          case 'get':
+            promise = this.fetch(type, data.id);
+            break;
+
+          case 'post':
+            promise = this.post(type, data);
+            break;
+
+          case 'patch':
+            promuse = this.patch(type, data);
+            break;
+
+          case 'delete':
+            promise = this.delete(type, data.id);
+            break;
+        }
+
+        return promise.then(function (json) {
+          return resolve(json);
+        }).catch(function (error) {
+          return reject(error);
+        });
       }
     }, {
       key: "data",
@@ -1174,8 +1171,18 @@ var ActionUI = function (exports) {
           }
         }
 
+        if (this.options.verbose) console.info('Store.fetch()', type, id, {
+          type: type,
+          id: id,
+          query: query,
+          store: this,
+          url: url,
+          options: this.options.fetch
+        });
         return fetch(url, this.options.fetch).then(function (response) {
-          return response.ok ? response.json() : Promise.reject(response);
+          return response.json().then(function (json) {
+            return response.ok ? json : Promise.reject(json);
+          });
         }).then(function (json) {
           return _this6.sync(json, url);
         }).catch(function (error) {
@@ -1217,8 +1224,18 @@ var ActionUI = function (exports) {
           'page[number]': _page2,
           'page[size]': size
         });
+        if (this.options.verbose) console.info('Store.page()', type, _page2, size, {
+          type: type,
+          page: _page2,
+          size: size,
+          store: this,
+          url: url,
+          options: options
+        });
         return fetch(url, this.options.fetch).then(function (response) {
-          return response.ok ? response.json() : Promise.reject(response);
+          return response.json().then(function (json) {
+            return response.ok ? json : Promise.reject(json);
+          });
         }).then(function (json) {
           return cache[type][size][_page2].sync({
             links: json.links || {},
@@ -1239,10 +1256,22 @@ var ActionUI = function (exports) {
           type: type,
           id: this.id(data)
         });
+        if (this.options.verbose) console.info('Store.post()', type, {
+          type: type,
+          data: data,
+          store: this,
+          url: url,
+          options: options
+        });
         return fetch(url, options).then(function (response) {
-          return response.json();
+          return response.json().then(function (json) {
+            return response.ok ? json : Promise.reject(json);
+          });
         }).then(function (json) {
           return _this8.sync(json);
+        }).catch(function (error) {
+          if (_this8.options.triggerChangesOnError) _this8.model(type).triggerChanges();
+          return Promise.reject(error);
         });
       }
     }, {
@@ -1258,10 +1287,22 @@ var ActionUI = function (exports) {
           type: type,
           id: this.id(data)
         });
+        if (this.options.verbose) console.info('Store.patch()', type, {
+          type: type,
+          data: data,
+          store: this,
+          url: url,
+          options: options
+        });
         return fetch(url, options).then(function (response) {
-          return response.json();
+          return response.json().then(function (json) {
+            return response.ok ? json : Promise.reject(json);
+          });
         }).then(function (json) {
           return _this9.sync(json);
+        }).catch(function (error) {
+          if (_this9.options.triggerChangesOnError) _this9.model(type).triggerChanges();
+          return Promise.reject(error);
         });
       }
     }, {
@@ -1276,15 +1317,22 @@ var ActionUI = function (exports) {
           id: id
         });
         if (this.options.verbose) console.info('Store.delete()', type, id, {
+          type: type,
+          id: id,
           store: this,
           url: url,
           options: options
         });
         return fetch(url, options).then(function (response) {
-          return response.ok ? response.json() : Promise.reject(response);
+          return response.json().then(function (json) {
+            return response.ok ? json : Promise.reject(json);
+          });
         }).then(function (json) {
           delete _this10._model[type][id];
           return json;
+        }).catch(function (error) {
+          if (_this10.options.triggerChangesOnError) _this10.model(type).triggerChanges();
+          return Promise.reject(error);
         });
       }
     }], [{
