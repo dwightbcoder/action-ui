@@ -1535,15 +1535,17 @@ var ActionUI = function (exports) {
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
           view: this
         });
+        Object.assign(this.constructor.options.eventRender.detail, {
+          name: this.model.view,
+          view: this
+        });
         document.querySelectorAll('[ui-view="' + this._name + '"]').forEach(function (_target) {
           _target.innerHTML = _this12.html;
 
+          _target.dispatchEvent(_this12.constructor.options.eventRender);
+
           _this12.renderSubviews(_target);
         });
-        Object.assign(this.constructor.options.eventRender.detail, {
-          view: this
-        });
-        document.dispatchEvent(this.constructor.options.eventRender);
         return Promise.resolve();
       }
     }, {

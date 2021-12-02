@@ -1374,21 +1374,21 @@ var ActionUI = (function (exports) {
 	     */
 	    render()
 	    {
-	        if ( this.constructor.options.verbose ) console.info( this.constructor.name + '.render()', this.name, {view:this} );
+			if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, { view: this });
+
+			Object.assign(this.constructor.options.eventRender.detail, {
+				name: this.model.view,
+				view: this
+			});
 
 	        document
 	            .querySelectorAll('[ui-view="'+this._name+'"]')
 	            .forEach((_target) =>
 	            {
-	                _target.innerHTML = this.html;
+					_target.innerHTML = this.html;
+					_target.dispatchEvent(this.constructor.options.eventRender);
 	                this.renderSubviews(_target);
 	            });
-
-	            Object.assign(this.constructor.options.eventRender.detail, {
-	                view: this
-	            });
-	    
-	            document.dispatchEvent(this.constructor.options.eventRender);
 	        
 	        return Promise.resolve()
 	    }
