@@ -949,7 +949,7 @@ var ActionUI = function (exports) {
           }
         }
 
-        if (id != null && 'string' == typeof id && !this._model[type][id]) {
+        if (id != null && ('string' == typeof id || 'number' == typeof id) && !this._model[type][id]) {
           this._model[type][id] = new Model({}, {
             model: this._model[type],
             property: id
@@ -1053,6 +1053,10 @@ var ActionUI = function (exports) {
 
         if (!this._model[type][id]) {
           this.modelCreate(type, id);
+        }
+
+        if (!this._model[type][id]) {
+          throw new Error('Store: No model for type: ' + type + ', id: ' + id);
         }
 
         this._model[type][id].sync(data);
@@ -1640,6 +1644,7 @@ var ActionUI = function (exports) {
       bubbles: true,
       detail: {
         type: 'render',
+        name: null,
         view: null
       }
     })

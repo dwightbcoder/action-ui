@@ -138,7 +138,7 @@ let _cache = {}
 let _options = {
     verbose: false,
     autoCache: true, // Automatically cache views when created
-    eventRender: new CustomEvent('view.render', { bubbles: true, detail: { type: 'render', view: null } })
+    eventRender: new CustomEvent('view.render', { bubbles: true, detail: { type: 'render', name: null, view: null } })
 }
 
 export { View }
