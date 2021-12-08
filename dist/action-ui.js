@@ -6,6 +6,10 @@ function _superPropBase(object, property) { while (!Object.prototype.hasOwnPrope
 
 function _typeof(obj) { "@babel/helpers - typeof"; if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
 
+function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { Promise.resolve(value).then(_next, _throw); } }
+
+function _asyncToGenerator(fn) { return function () { var self = this, args = arguments; return new Promise(function (resolve, reject) { var gen = fn.apply(self, args); function _next(value) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value); } function _throw(err) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err); } _next(undefined); }); }; }
+
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function"); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, writable: true, configurable: true } }); if (superClass) _setPrototypeOf(subClass, superClass); }
 
 function _setPrototypeOf(o, p) { _setPrototypeOf = Object.setPrototypeOf || function _setPrototypeOf(o, p) { o.__proto__ = p; return o; }; return _setPrototypeOf(o, p); }
@@ -107,7 +111,7 @@ var ActionUI = function (exports) {
 
       if (keys.length > 1) {
         var obj = remapObjectKeys(keys, entry[1]);
-        Util.deepAssign(data, obj);
+        deepAssign(data, obj);
         delete data[entry[0]];
       }
 
@@ -847,7 +851,7 @@ var ActionUI = function (exports) {
   }(Model);
   /**
    * Store
-   * @version 20211104
+   * @version 20211203.1311
    * @description Remote data store
    * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
    */
@@ -1142,62 +1146,119 @@ var ActionUI = function (exports) {
         };
 
         return fetch;
-      }(function (type, id) {
-        var _this6 = this;
+      }( /*#__PURE__*/function () {
+        var _ref = _asyncToGenerator( /*#__PURE__*/regeneratorRuntime.mark(function _callee(type, id) {
+          var query,
+              url,
+              search,
+              response,
+              json_1,
+              json_2,
+              _args = arguments;
+          return regeneratorRuntime.wrap(function _callee$(_context) {
+            while (1) {
+              switch (_context.prev = _context.next) {
+                case 0:
+                  query = _args.length > 2 && _args[2] !== undefined ? _args[2] : {};
+                  type = this.type({
+                    type: type
+                  });
 
-        var query = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
-        type = this.type({
-          type: type
-        });
+                  if (_typeof(id) == 'object') {
+                    query = id;
+                    id = query.id;
+                  }
 
-        if (_typeof(id) == 'object') {
-          query = id;
-          id = query.id;
-        }
+                  Object.assign(query, {
+                    type: type,
+                    id: id
+                  });
+                  url = this.url(query);
 
-        Object.assign(query, {
-          type: type,
-          id: id
-        });
-        var url = this.url(query);
+                  if (!this._model[type]) {
+                    _context.next = 18;
+                    break;
+                  }
 
-        if (this._model[type]) {
-          if (id != undefined && this._model[type][id] && !(this._model[type][id].hasOwnProperty('_store') && this._model[type][id]._store.url.indexOf(url) == -1)) {
-            return Promise.resolve(this._model[type][id]);
-          } else if (id == undefined && Object.keys(query).length == 0) {
-            return Promise.resolve(this._model[type]);
-          } else if (id == undefined) {
-            var search = this.search(query);
+                  if (!(id != undefined && this._model[type][id] && !(this._model[type][id].hasOwnProperty('_store') && this._model[type][id]._store.url.indexOf(url) == -1))) {
+                    _context.next = 10;
+                    break;
+                  }
 
-            if (Object.keys(search).length) {
-              return Promise.resolve(search);
+                  return _context.abrupt("return", Promise.resolve(this._model[type][id]));
+
+                case 10:
+                  if (!(id == undefined && Object.keys(query).length == 0)) {
+                    _context.next = 14;
+                    break;
+                  }
+
+                  return _context.abrupt("return", Promise.resolve(this._model[type]));
+
+                case 14:
+                  if (!(id == undefined)) {
+                    _context.next = 18;
+                    break;
+                  }
+
+                  search = this.search(query);
+
+                  if (!Object.keys(search).length) {
+                    _context.next = 18;
+                    break;
+                  }
+
+                  return _context.abrupt("return", Promise.resolve(search));
+
+                case 18:
+                  if (this.options.verbose) console.info('Store.fetch()', type, id, {
+                    type: type,
+                    id: id,
+                    query: query,
+                    store: this,
+                    url: url,
+                    options: this.options.fetch
+                  });
+                  _context.prev = 19;
+                  _context.next = 22;
+                  return fetch(url, this.options.fetch);
+
+                case 22:
+                  response = _context.sent;
+                  _context.next = 25;
+                  return response.json();
+
+                case 25:
+                  json_1 = _context.sent;
+                  json_2 = response.ok ? json_1 : Promise.reject(json_1);
+                  return _context.abrupt("return", this.sync(json_2, url));
+
+                case 30:
+                  _context.prev = 30;
+                  _context.t0 = _context["catch"](19);
+                  if (this.options.triggerChangesOnError) this.model(type).triggerChanges();
+                  _context.next = 35;
+                  return Promise.reject(_context.t0);
+
+                case 35:
+                  return _context.abrupt("return", _context.sent);
+
+                case 36:
+                case "end":
+                  return _context.stop();
+              }
             }
-          }
-        }
+          }, _callee, this, [[19, 30]]);
+        }));
 
-        if (this.options.verbose) console.info('Store.fetch()', type, id, {
-          type: type,
-          id: id,
-          query: query,
-          store: this,
-          url: url,
-          options: this.options.fetch
-        });
-        return fetch(url, this.options.fetch).then(function (response) {
-          return response.json().then(function (json) {
-            return response.ok ? json : Promise.reject(json);
-          });
-        }).then(function (json) {
-          return _this6.sync(json, url);
-        }).catch(function (error) {
-          if (_this6.options.triggerChangesOnError) _this6.model(type).triggerChanges();
-          return Promise.reject(error);
-        });
-      })
+        return function (_x5, _x6) {
+          return _ref.apply(this, arguments);
+        };
+      }())
     }, {
       key: "page",
       value: function page(type) {
-        var _this7 = this;
+        var _this6 = this;
 
         var _page2 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 1;
 
@@ -1243,15 +1304,15 @@ var ActionUI = function (exports) {
         }).then(function (json) {
           return cache[type][size][_page2].sync({
             links: json.links || {},
-            count: Object.keys(_this7.data(json)).length,
-            model: _this7.sync(json)
+            count: Object.keys(_this6.data(json)).length,
+            model: _this6.sync(json)
           });
         });
       }
     }, {
       key: "post",
       value: function post(type, data) {
-        var _this8 = this;
+        var _this7 = this;
 
         var options = Object.create(this.options.fetch);
         options.method = 'POST';
@@ -1272,16 +1333,16 @@ var ActionUI = function (exports) {
             return response.ok ? json : Promise.reject(json);
           });
         }).then(function (json) {
-          return _this8.sync(json);
+          return _this7.sync(json);
         }).catch(function (error) {
-          if (_this8.options.triggerChangesOnError) _this8.model(type).triggerChanges();
+          if (_this7.options.triggerChangesOnError) _this7.model(type).triggerChanges();
           return Promise.reject(error);
         });
       }
     }, {
       key: "patch",
       value: function patch(type, data) {
-        var _this9 = this;
+        var _this8 = this;
 
         var options = Object.create(this.options.fetch);
         options.method = 'PATCH';
@@ -1303,16 +1364,16 @@ var ActionUI = function (exports) {
             return response.ok ? json : Promise.reject(json);
           });
         }).then(function (json) {
-          return _this9.sync(json);
+          return _this8.sync(json);
         }).catch(function (error) {
-          if (_this9.options.triggerChangesOnError) _this9.model(type).triggerChanges();
+          if (_this8.options.triggerChangesOnError) _this8.model(type).triggerChanges();
           return Promise.reject(error);
         });
       }
     }, {
       key: "delete",
       value: function _delete(type, id) {
-        var _this10 = this;
+        var _this9 = this;
 
         var options = Object.create(this.options.fetch);
         options.method = 'DELETE';
@@ -1332,10 +1393,10 @@ var ActionUI = function (exports) {
             return response.ok ? json : Promise.reject(json);
           });
         }).then(function (json) {
-          delete _this10._model[type][id];
+          delete _this9._model[type][id];
           return json;
         }).catch(function (error) {
-          if (_this10.options.triggerChangesOnError) _this10.model(type).triggerChanges();
+          if (_this9.options.triggerChangesOnError) _this9.model(type).triggerChanges();
           return Promise.reject(error);
         });
       }
@@ -1479,7 +1540,7 @@ var ActionUI = function (exports) {
 
   var View = /*#__PURE__*/function () {
     function View(name, html, model) {
-      var _this11 = this;
+      var _this10 = this;
 
       _classCallCheck(this, View);
 
@@ -1499,7 +1560,7 @@ var ActionUI = function (exports) {
       this._html = html;
       this._model = model;
       model.watch(function (changes) {
-        return _this11.update(changes);
+        return _this10.update(changes);
       });
 
       if (this.constructor.options.autoCache) {
@@ -1534,7 +1595,7 @@ var ActionUI = function (exports) {
     }, {
       key: "render",
       value: function render() {
-        var _this12 = this;
+        var _this11 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
           view: this
@@ -1544,18 +1605,18 @@ var ActionUI = function (exports) {
           view: this
         });
         document.querySelectorAll('[ui-view="' + this._name + '"]').forEach(function (_target) {
-          _target.innerHTML = _this12.html;
+          _target.innerHTML = _this11.html;
 
-          _target.dispatchEvent(_this12.constructor.options.eventRender);
+          _target.dispatchEvent(_this11.constructor.options.eventRender);
 
-          _this12.renderSubviews(_target);
+          _this11.renderSubviews(_target);
         });
         return Promise.resolve();
       }
     }, {
       key: "renderSubviews",
       value: function renderSubviews(parent) {
-        var _this13 = this;
+        var _this12 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.renderSubviews()', this.name, {
           view: this,
@@ -1564,7 +1625,7 @@ var ActionUI = function (exports) {
         parent.querySelectorAll('[ui-view]').forEach(function (_sub) {
           var viewName = _sub.getAttribute('ui-view');
 
-          var view = _this13.constructor.cache(viewName);
+          var view = _this12.constructor.cache(viewName);
 
           if (view) {
             view.render();
@@ -1660,7 +1721,7 @@ var ActionUI = function (exports) {
     var _super4 = _createSuper(ViewFile);
 
     function ViewFile(name, file, model) {
-      var _this14;
+      var _this13;
 
       _classCallCheck(this, ViewFile);
 
@@ -1673,9 +1734,9 @@ var ActionUI = function (exports) {
         file = name;
       }
 
-      _this14 = _super4.call(this, name, null, model);
-      _this14.file = file;
-      return _this14;
+      _this13 = _super4.call(this, name, null, model);
+      _this13.file = file;
+      return _this13;
     }
 
     _createClass(ViewFile, [{
@@ -1687,7 +1748,7 @@ var ActionUI = function (exports) {
     }, {
       key: "render",
       value: function render() {
-        var _this15 = this;
+        var _this14 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
           view: this
@@ -1696,7 +1757,7 @@ var ActionUI = function (exports) {
         var _promise = this._html == null ? this.fetch() : Promise.resolve();
 
         return _promise.then(function () {
-          return _get(_getPrototypeOf(ViewFile.prototype), "render", _this15).call(_this15);
+          return _get(_getPrototypeOf(ViewFile.prototype), "render", _this14).call(_this14);
         });
       }
     }, {
@@ -1712,7 +1773,7 @@ var ActionUI = function (exports) {
 
         return fetch;
       }(function () {
-        var _this16 = this;
+        var _this15 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.fetch()', this.name, {
           view: this
@@ -1725,27 +1786,27 @@ var ActionUI = function (exports) {
             throw new Error(response.statusText);
           }
         }).then(function (html) {
-          _this16._html = html;
+          _this15._html = html;
 
-          _this16.fetchAfter(true);
+          _this15.fetchAfter(true);
 
-          return _this16._html;
+          return _this15._html;
         }).catch(function (e) {
-          _this16.fetchAfter(false);
+          _this15.fetchAfter(false);
 
-          throw new Error('File not found: ' + _this16.fileName);
+          throw new Error('File not found: ' + _this15.fileName);
         });
       })
     }, {
       key: "fetchBefore",
       value: function fetchBefore() {
-        var _this17 = this;
+        var _this16 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.fetchBefore()', this.name, {
           view: this
         });
         document.querySelectorAll('[ui-view="' + this._name + '"]').forEach(function (target) {
-          _this17.constructor.setCssClass(target, _options$2.cssClass.loading);
+          _this16.constructor.setCssClass(target, _options$2.cssClass.loading);
         });
 
         if (this.constructor.options.eventFetch) {
@@ -1759,13 +1820,13 @@ var ActionUI = function (exports) {
     }, {
       key: "fetchAfter",
       value: function fetchAfter(success) {
-        var _this18 = this;
+        var _this17 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.fetchAfter()', this.name, {
           view: this
         });
         document.querySelectorAll('[ui-view="' + this._name + '"]').forEach(function (target) {
-          _this18.constructor.setCssClass(target, success ? _options$2.cssClass.success : _options$2.cssClass.fail);
+          _this17.constructor.setCssClass(target, success ? _options$2.cssClass.success : _options$2.cssClass.fail);
         });
 
         if (this.constructor.options.eventFetch) {
@@ -1881,7 +1942,7 @@ var ActionUI = function (exports) {
     _createClass(ViewHandlebars, [{
       key: "render",
       value: function render() {
-        var _this19 = this;
+        var _this18 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
           view: this
@@ -1894,18 +1955,18 @@ var ActionUI = function (exports) {
         }
 
         return _promise.then(function () {
-          return _get(_getPrototypeOf(ViewHandlebars.prototype), "render", _this19).call(_this19);
+          return _get(_getPrototypeOf(ViewHandlebars.prototype), "render", _this18).call(_this18);
         });
       }
     }, {
       key: "fetch",
       value: function fetch() {
-        var _this20 = this;
+        var _this19 = this;
 
         return _get(_getPrototypeOf(ViewHandlebars.prototype), "fetch", this).call(this).then(function (html) {
           if (!('templates' in Handlebars)) Handlebars.templates = [];
-          Handlebars.templates[_this20.file] = Handlebars.compile(html);
-          _this20.html = Handlebars.templates[_this20.file];
+          Handlebars.templates[_this19.file] = Handlebars.compile(html);
+          _this19.html = Handlebars.templates[_this19.file];
           return html;
         });
       } // #region Static methods
@@ -1986,7 +2047,7 @@ var ActionUI = function (exports) {
     }, {
       key: "navigate",
       value: function navigate(route) {
-        var _this21 = this;
+        var _this20 = this;
 
         var data = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
         var event = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : null;
@@ -2097,11 +2158,11 @@ var ActionUI = function (exports) {
           var viewContainer = document.querySelectorAll('[ui-view="' + this.view.name + '"]');
           this.handleLoading(viewContainer, true);
           result.then(function () {
-            return _this21.handleLoading(viewContainer, false);
+            return _this20.handleLoading(viewContainer, false);
           }).catch(function (e) {
-            _this21.handleLoading(viewContainer, false);
+            _this20.handleLoading(viewContainer, false);
 
-            _this21.handleError(controller, model, path, e);
+            _this20.handleError(controller, model, path, e);
 
             throw e;
           });
