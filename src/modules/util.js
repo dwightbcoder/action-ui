@@ -96,7 +96,7 @@ function formToObject(form, data = {})
 		if (keys.length > 1)
 		{
 			const obj = remapObjectKeys(keys, entry[1])
-			Util.deepAssign(data, obj)
+			deepAssign(data, obj)
 			delete data[entry[0]]
 		}
 

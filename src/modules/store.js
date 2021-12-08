@@ -4,7 +4,7 @@ import { Action } from './action.js'
 
 /**
  * Store
- * @version 20211104
+ * @version 20211203.1311
  * @description Remote data store
  * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
  */
@@ -209,7 +209,7 @@ class Store
 
 		if (!this._model[type][id])
 		{
-			throw new Error('Store: No model for type: ' + type + ', id: ' + id )
+			throw new Error('Store: No model for type: ' + type + ', id: ' + id)
 		}
 
 		this._model[type][id].sync(data)
@@ -218,7 +218,7 @@ class Store
 		{
 			if (!this._model[type][id].hasOwnProperty('_store'))
 				this._model[type][id]._store = { url: [] }
-			
+
 			if (this._model[type][id]._store.url.indexOf(url) == -1)
 				this._model[type][id]._store.url.push(url)
 
@@ -288,7 +288,7 @@ class Store
 		return results
 	}
 
-	fetch(type, id, query = {})
+	async fetch(type, id, query = {})
 	{
 		type = this.type({ type: type })
 
@@ -324,14 +324,18 @@ class Store
 		if (this.options.verbose)
 			console.info('Store.fetch()', type, id, { type: type, id: id, query: query, store: this, url: url, options: this.options.fetch })
 
-		return fetch(url, this.options.fetch)
-			.then(response => response.json().then(json => response.ok ? json : Promise.reject(json)))
-			.then(json => this.sync(json, url))
-			.catch(error =>
-			{
-				if (this.options.triggerChangesOnError) this.model(type).triggerChanges()
-				return Promise.reject(error)
-			})
+		try
+		{
+			const response = await fetch(url, this.options.fetch)
+			const json_1 = await response.json()
+			const json_2 = response.ok ? json_1 : Promise.reject(json_1)
+			return this.sync(json_2, url)
+		} catch (error)
+		{
+			if (this.options.triggerChangesOnError)
+				this.model(type).triggerChanges()
+			return await Promise.reject(error)
+		}
 	}
 
 	page(type, page = 1, size = 0)
