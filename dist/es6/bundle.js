@@ -430,13 +430,15 @@ var ActionUI = (function (exports) {
 			Action.setCssClass(target, _options.cssClass.loading);
 			Action.reflectCssClass(this.name, _options.cssClass.loading);
 
-			Object.assign(_options.eventBefore.detail, {
+			let eventBefore = new CustomEvent(_options.eventBefore.type, _options.eventBefore);
+
+			Object.assign(eventBefore.detail, {
 				name: this.name,
 				data: data,
 				model: this.model
 			});
 
-			return target.dispatchEvent(_options.eventBefore)
+			return target.dispatchEvent(eventBefore)
 		}
 
 		after(target, success, result, data)
@@ -453,7 +455,9 @@ var ActionUI = (function (exports) {
 				this.syncModel(result);
 			}
 
-			Object.assign(_options.eventAfter.detail, {
+			let eventAfter = new CustomEvent(_options.eventAfter.type, _options.eventAfter);
+
+			Object.assign(eventAfter.detail, {
 				name: this.name,
 				success: success,
 				data: data,
@@ -462,7 +466,7 @@ var ActionUI = (function (exports) {
 				canceled: (result instanceof ActionErrorCanceled)
 			});
 
-			target.dispatchEvent(_options.eventAfter);
+			target.dispatchEvent(eventAfter);
 			return result
 		}
 
