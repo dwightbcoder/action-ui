@@ -382,6 +382,7 @@ class Store
 	{
 		let options = Object.create(this.options.fetch)
 		options.method = 'POST'
+		options.body = this.body(data)
 
 		type = type || this.type(data)
 		let url = this.url({ type: type, id: this.id(data) })
