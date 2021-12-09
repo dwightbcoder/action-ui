@@ -27,7 +27,7 @@ class Store
 			},
 			'fetch': {
 				'method': 'GET',
-				'headers': new Headers({ 'Content-Type': 'application/json' }),
+				'headers': { 'Content-Type': 'application/json' },
 				'mode': 'no-cors'
 			},
 			'triggerChangesOnError': true, // Allows views to update contents on failed requests, especially useful for Fetch All requests which return no results or 404
@@ -76,14 +76,14 @@ class Store
 		Store.cache(this)
 	}
 
-	body(data)
+	body(type, data)
 	{
 		return JSON.stringify(data)
 	}
 
 	model(type, id)
 	{
-		return this._model[type]
+		return id ? this._model[type][id] : this._model[type]
 	}
 
 	modelCreate(type, id = null)
@@ -131,7 +131,7 @@ class Store
 		{
 			case 'get': promise = this.fetch(type, data.id); break
 			case 'post': promise = this.post(type, data); break
-			case 'patch': promuse = this.patch(type, data); break
+			case 'patch': promise = this.patch(type, data); break
 			case 'delete': promise = this.delete(type, data.id); break
 		}
 
@@ -380,11 +380,12 @@ class Store
 
 	post(type, data)
 	{
-		let options = Object.create(this.options.fetch)
-		options.method = 'POST'
-
 		type = type || this.type(data)
 		let url = this.url({ type: type, id: this.id(data) })
+		let options = Object.create(this.options.fetch)
+
+		options.method = 'POST'
+		options.body = this.body(type, data)
 
 		if (this.options.verbose)
 			console.info('Store.post()', type, { type: type, data: data, store: this, url: url, options: options })
@@ -401,12 +402,13 @@ class Store
 
 	patch(type, data)
 	{
-		let options = Object.create(this.options.fetch)
-		options.method = 'PATCH'
-		options.body = this.body(data)
-
 		type = type || this.type(data)
 		let url = this.url({ type: type, id: this.id(data) })
+		let options = {}
+		Util.deepCopy(options, this.options.fetch)//Object.create(this.options.fetch)
+
+		options.method = 'PATCH'
+		options.body = this.body(type, data)
 
 		if (this.options.verbose)
 			console.info('Store.patch()', type, { type: type, data: data, store: this, url: url, options: options })

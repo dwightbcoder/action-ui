@@ -28,11 +28,15 @@ class Action
 		this.running = true
 		target = target || document.body
 		data = Object.assign(data, Action.data(target))
-		this.before(target, data)
+		let canceled = !this.before(target, data)
 
 		var promise = null;
 
-		if (this.handler instanceof Function)
+		if (canceled)
+		{
+			promise = Promise.reject(new ActionErrorCanceled('Canceled'))
+		}
+		else if (this.handler instanceof Function)
 		{
 			promise = (new Promise((resolve, reject) => this.handler(resolve, reject, data)))
 		}
@@ -111,7 +115,7 @@ class Action
 			model: this.model
 		})
 
-		target.dispatchEvent(_options.eventBefore)
+		return target.dispatchEvent(_options.eventBefore)
 	}
 
 	after(target, success, result, data)
@@ -123,7 +127,7 @@ class Action
 		Action.setCssClass(target, cssClass)
 		Action.reflectCssClass(this.name, cssClass)
 
-		if (result != undefined)
+		if (result != undefined && !(result instanceof Error))
 		{
 			this.syncModel(result)
 		}
@@ -132,7 +136,9 @@ class Action
 			name: this.name,
 			success: success,
 			data: data,
-			model: this.model
+			model: this.model,
+			error: (result instanceof Error) ? result : false,
+			canceled: (result instanceof ActionErrorCanceled)
 		})
 
 		target.dispatchEvent(_options.eventAfter)
@@ -285,9 +291,10 @@ class Action
 
 	static get options() { return _options }
 	static set options(value) { Util.deepAssign(_options, value) }
-
 	// #endregion
 }
+
+class ActionErrorCanceled extends Error { }
 
 let _cache = {}
 let _options = {
@@ -295,10 +302,10 @@ let _options = {
 	autoCreate: true,
 	autoCache: true,
 	cssClass: { 'loading': 'loading', 'success': 'success', 'fail': 'fail' },
-	eventBefore: new CustomEvent('action.before', { bubbles: true, detail: { type: 'before', name: null, data: null, model: null } }),
+	eventBefore: new CustomEvent('action.before', { bubbles: true, cancelable: true, detail: { type: 'before', name: null, data: null, model: null } }),
 	eventAfter: new CustomEvent('action.after', { bubbles: true, detail: { type: 'after', name: null, data: null, success: null, model: null } })
 }
 
 Action.init()
 
-export { Action }
+export { Action, ActionErrorCanceled }

@@ -349,11 +349,15 @@ var ActionUI = (function (exports) {
 			this.running = true;
 			target = target || document.body;
 			data = Object.assign(data, Action.data(target));
-			this.before(target, data);
+			let canceled = !this.before(target, data);
 
 			var promise = null;
 
-			if (this.handler instanceof Function)
+			if (canceled)
+			{
+				promise = Promise.reject(new ActionErrorCanceled('Canceled'));
+			}
+			else if (this.handler instanceof Function)
 			{
 				promise = (new Promise((resolve, reject) => this.handler(resolve, reject, data)));
 			}
@@ -432,7 +436,7 @@ var ActionUI = (function (exports) {
 				model: this.model
 			});
 
-			target.dispatchEvent(_options.eventBefore);
+			return target.dispatchEvent(_options.eventBefore)
 		}
 
 		after(target, success, result, data)
@@ -444,7 +448,7 @@ var ActionUI = (function (exports) {
 			Action.setCssClass(target, cssClass);
 			Action.reflectCssClass(this.name, cssClass);
 
-			if (result != undefined)
+			if (result != undefined && !(result instanceof Error))
 			{
 				this.syncModel(result);
 			}
@@ -453,7 +457,9 @@ var ActionUI = (function (exports) {
 				name: this.name,
 				success: success,
 				data: data,
-				model: this.model
+				model: this.model,
+				error: (result instanceof Error) ? result : false,
+				canceled: (result instanceof ActionErrorCanceled)
 			});
 
 			target.dispatchEvent(_options.eventAfter);
@@ -606,9 +612,10 @@ var ActionUI = (function (exports) {
 
 		static get options() { return _options }
 		static set options(value) { deepAssign(_options, value); }
-
 		// #endregion
 	}
+
+	class ActionErrorCanceled extends Error { }
 
 	let _cache = {};
 	let _options = {
@@ -616,7 +623,7 @@ var ActionUI = (function (exports) {
 		autoCreate: true,
 		autoCache: true,
 		cssClass: { 'loading': 'loading', 'success': 'success', 'fail': 'fail' },
-		eventBefore: new CustomEvent('action.before', { bubbles: true, detail: { type: 'before', name: null, data: null, model: null } }),
+		eventBefore: new CustomEvent('action.before', { bubbles: true, cancelable: true, detail: { type: 'before', name: null, data: null, model: null } }),
 		eventAfter: new CustomEvent('action.after', { bubbles: true, detail: { type: 'after', name: null, data: null, success: null, model: null } })
 	};
 
@@ -799,7 +806,7 @@ var ActionUI = (function (exports) {
 				},
 				'fetch': {
 					'method': 'GET',
-					'headers': new Headers({ 'Content-Type': 'application/json' }),
+					'headers': { 'Content-Type': 'application/json' },
 					'mode': 'no-cors'
 				},
 				'triggerChangesOnError': true, // Allows views to update contents on failed requests, especially useful for Fetch All requests which return no results or 404
@@ -848,14 +855,14 @@ var ActionUI = (function (exports) {
 			Store.cache(this);
 		}
 
-		body(data)
+		body(type, data)
 		{
 			return JSON.stringify(data)
 		}
 
 		model(type, id)
 		{
-			return this._model[type]
+			return id ? this._model[type][id] : this._model[type]
 		}
 
 		modelCreate(type, id = null)
@@ -903,7 +910,7 @@ var ActionUI = (function (exports) {
 			{
 				case 'get': promise = this.fetch(type, data.id); break
 				case 'post': promise = this.post(type, data); break
-				case 'patch': promuse = this.patch(type, data); break
+				case 'patch': promise = this.patch(type, data); break
 				case 'delete': promise = this.delete(type, data.id); break
 			}
 
@@ -1152,11 +1159,12 @@ var ActionUI = (function (exports) {
 
 		post(type, data)
 		{
-			let options = Object.create(this.options.fetch);
-			options.method = 'POST';
-
 			type = type || this.type(data);
 			let url = this.url({ type: type, id: this.id(data) });
+			let options = Object.create(this.options.fetch);
+
+			options.method = 'POST';
+			options.body = this.body(type, data);
 
 			if (this.options.verbose)
 				console.info('Store.post()', type, { type: type, data: data, store: this, url: url, options: options });
@@ -1173,12 +1181,13 @@ var ActionUI = (function (exports) {
 
 		patch(type, data)
 		{
-			let options = Object.create(this.options.fetch);
-			options.method = 'PATCH';
-			options.body = this.body(data);
-
 			type = type || this.type(data);
 			let url = this.url({ type: type, id: this.id(data) });
+			let options = {};
+			deepCopy(options, this.options.fetch);//Object.create(this.options.fetch)
+
+			options.method = 'PATCH';
+			options.body = this.body(type, data);
 
 			if (this.options.verbose)
 				console.info('Store.patch()', type, { type: type, data: data, store: this, url: url, options: options });
@@ -1262,7 +1271,7 @@ var ActionUI = (function (exports) {
 	            },
 	            'per_page': 0,
 	            'fetch': {
-	                'headers': new Headers({ 'Content-Type': 'application/vnd.api+json' })
+	                'headers': { 'Content-Type': 'application/vnd.api+json' }
 	            }
 	        };
 
@@ -1283,8 +1292,33 @@ var ActionUI = (function (exports) {
 	        return super.sync(json, url)
 	    }
 
-	    body(data) {
-	        return JSON.stringify({ data })
+	    body(type, data)
+	    {
+	        let id = data.id ? data.id : this.id(data);
+			let jsonapi = {};
+			jsonapi[this.options.keys.data] = {};
+			jsonapi[this.options.keys.data][this.options.keys.type] = type;
+			jsonapi[this.options.keys.data].attributes = {};
+
+			if (id) jsonapi[this.options.keys.data][this.options.keys.id] = id;
+
+			if (data[this.options.keys.data])
+			{
+				deepAssign(jsonapi[this.options.keys.data], data[this.options.keys.data]);
+			}
+			else if (data.attributes)
+			{
+				deepAssign(jsonapi[this.options.keys.data], data);
+			}
+	        else
+	        {
+				deepAssign(jsonapi[this.options.keys.data].attributes, data);
+			}
+
+			if (jsonapi[this.options.keys.data].attributes[this.options.keys.type]) delete jsonapi[this.options.keys.data].attributes[this.options.keys.type];
+			if (jsonapi[this.options.keys.data].attributes[this.options.keys.id]) delete jsonapi[this.options.keys.data].attributes[this.options.keys.id];
+
+			return super.body(type, jsonapi)
 	    }
 
 	}

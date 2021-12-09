@@ -12,15 +12,21 @@ function _asyncToGenerator(fn) { return function () { var self = this, args = ar
 
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function"); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, writable: true, configurable: true } }); if (superClass) _setPrototypeOf(subClass, superClass); }
 
-function _setPrototypeOf(o, p) { _setPrototypeOf = Object.setPrototypeOf || function _setPrototypeOf(o, p) { o.__proto__ = p; return o; }; return _setPrototypeOf(o, p); }
-
 function _createSuper(Derived) { var hasNativeReflectConstruct = _isNativeReflectConstruct(); return function _createSuperInternal() { var Super = _getPrototypeOf(Derived), result; if (hasNativeReflectConstruct) { var NewTarget = _getPrototypeOf(this).constructor; result = Reflect.construct(Super, arguments, NewTarget); } else { result = Super.apply(this, arguments); } return _possibleConstructorReturn(this, result); }; }
 
 function _possibleConstructorReturn(self, call) { if (call && (_typeof(call) === "object" || typeof call === "function")) { return call; } else if (call !== void 0) { throw new TypeError("Derived constructors may only return object or undefined"); } return _assertThisInitialized(self); }
 
 function _assertThisInitialized(self) { if (self === void 0) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return self; }
 
+function _wrapNativeSuper(Class) { var _cache = typeof Map === "function" ? new Map() : undefined; _wrapNativeSuper = function _wrapNativeSuper(Class) { if (Class === null || !_isNativeFunction(Class)) return Class; if (typeof Class !== "function") { throw new TypeError("Super expression must either be null or a function"); } if (typeof _cache !== "undefined") { if (_cache.has(Class)) return _cache.get(Class); _cache.set(Class, Wrapper); } function Wrapper() { return _construct(Class, arguments, _getPrototypeOf(this).constructor); } Wrapper.prototype = Object.create(Class.prototype, { constructor: { value: Wrapper, enumerable: false, writable: true, configurable: true } }); return _setPrototypeOf(Wrapper, Class); }; return _wrapNativeSuper(Class); }
+
+function _construct(Parent, args, Class) { if (_isNativeReflectConstruct()) { _construct = Reflect.construct; } else { _construct = function _construct(Parent, args, Class) { var a = [null]; a.push.apply(a, args); var Constructor = Function.bind.apply(Parent, a); var instance = new Constructor(); if (Class) _setPrototypeOf(instance, Class.prototype); return instance; }; } return _construct.apply(null, arguments); }
+
 function _isNativeReflectConstruct() { if (typeof Reflect === "undefined" || !Reflect.construct) return false; if (Reflect.construct.sham) return false; if (typeof Proxy === "function") return true; try { Boolean.prototype.valueOf.call(Reflect.construct(Boolean, [], function () {})); return true; } catch (e) { return false; } }
+
+function _isNativeFunction(fn) { return Function.toString.call(fn).indexOf("[native code]") !== -1; }
+
+function _setPrototypeOf(o, p) { _setPrototypeOf = Object.setPrototypeOf || function _setPrototypeOf(o, p) { o.__proto__ = p; return o; }; return _setPrototypeOf(o, p); }
 
 function _getPrototypeOf(o) { _getPrototypeOf = Object.setPrototypeOf ? Object.getPrototypeOf : function _getPrototypeOf(o) { return o.__proto__ || Object.getPrototypeOf(o); }; return _getPrototypeOf(o); }
 
@@ -377,10 +383,12 @@ var ActionUI = function (exports) {
         this.running = true;
         target = target || document.body;
         data = Object.assign(data, Action.data(target));
-        this.before(target, data);
+        var canceled = !this.before(target, data);
         var promise = null;
 
-        if (this.handler instanceof Function) {
+        if (canceled) {
+          promise = Promise.reject(new ActionErrorCanceled('Canceled'));
+        } else if (this.handler instanceof Function) {
           promise = new Promise(function (resolve, reject) {
             return _this2.handler(resolve, reject, data);
           });
@@ -467,7 +475,7 @@ var ActionUI = function (exports) {
           data: data,
           model: this.model
         });
-        target.dispatchEvent(_options.eventBefore);
+        return target.dispatchEvent(_options.eventBefore);
       }
     }, {
       key: "after",
@@ -484,7 +492,7 @@ var ActionUI = function (exports) {
         Action.setCssClass(target, cssClass);
         Action.reflectCssClass(this.name, cssClass);
 
-        if (result != undefined) {
+        if (result != undefined && !(result instanceof Error)) {
           this.syncModel(result);
         }
 
@@ -492,7 +500,9 @@ var ActionUI = function (exports) {
           name: this.name,
           success: success,
           data: data,
-          model: this.model
+          model: this.model,
+          error: result instanceof Error ? result : false,
+          canceled: result instanceof ActionErrorCanceled
         });
         target.dispatchEvent(_options.eventAfter);
         return result;
@@ -630,6 +640,20 @@ var ActionUI = function (exports) {
     return Action;
   }();
 
+  var ActionErrorCanceled = /*#__PURE__*/function (_Error) {
+    _inherits(ActionErrorCanceled, _Error);
+
+    var _super = _createSuper(ActionErrorCanceled);
+
+    function ActionErrorCanceled() {
+      _classCallCheck(this, ActionErrorCanceled);
+
+      return _super.apply(this, arguments);
+    }
+
+    return ActionErrorCanceled;
+  }( /*#__PURE__*/_wrapNativeSuper(Error));
+
   var _cache = {};
   var _options = {
     verbose: false,
@@ -642,6 +666,7 @@ var ActionUI = function (exports) {
     },
     eventBefore: new CustomEvent('action.before', {
       bubbles: true,
+      cancelable: true,
       detail: {
         type: 'before',
         name: null,
@@ -705,7 +730,7 @@ var ActionUI = function (exports) {
   var JsonApi = /*#__PURE__*/function (_Model) {
     _inherits(JsonApi, _Model);
 
-    var _super = _createSuper(JsonApi);
+    var _super2 = _createSuper(JsonApi);
 
     function JsonApi(baseUrl, model) {
       var _this3;
@@ -724,7 +749,7 @@ var ActionUI = function (exports) {
       }
 
       model._paging = {};
-      _this3 = _super.call(this, model);
+      _this3 = _super2.call(this, model);
       _this3.baseUrl = baseUrl;
       return _this3;
     }
@@ -876,9 +901,9 @@ var ActionUI = function (exports) {
         },
         'fetch': {
           'method': 'GET',
-          'headers': new Headers({
+          'headers': {
             'Content-Type': 'application/json'
-          }),
+          },
           'mode': 'no-cors'
         },
         'triggerChangesOnError': true,
@@ -924,13 +949,13 @@ var ActionUI = function (exports) {
 
     _createClass(Store, [{
       key: "body",
-      value: function body(data) {
+      value: function body(type, data) {
         return JSON.stringify(data);
       }
     }, {
       key: "model",
       value: function model(type, id) {
-        return this._model[type];
+        return id ? this._model[type][id] : this._model[type];
       }
     }, {
       key: "modelCreate",
@@ -985,7 +1010,7 @@ var ActionUI = function (exports) {
             break;
 
           case 'patch':
-            promuse = this.patch(type, data);
+            promise = this.patch(type, data);
             break;
 
           case 'delete':
@@ -1314,13 +1339,14 @@ var ActionUI = function (exports) {
       value: function post(type, data) {
         var _this7 = this;
 
-        var options = Object.create(this.options.fetch);
-        options.method = 'POST';
         type = type || this.type(data);
         var url = this.url({
           type: type,
           id: this.id(data)
         });
+        var options = Object.create(this.options.fetch);
+        options.method = 'POST';
+        options.body = this.body(type, data);
         if (this.options.verbose) console.info('Store.post()', type, {
           type: type,
           data: data,
@@ -1344,14 +1370,16 @@ var ActionUI = function (exports) {
       value: function patch(type, data) {
         var _this8 = this;
 
-        var options = Object.create(this.options.fetch);
-        options.method = 'PATCH';
-        options.body = this.body(data);
         type = type || this.type(data);
         var url = this.url({
           type: type,
           id: this.id(data)
         });
+        var options = {};
+        deepCopy(options, this.options.fetch); //Object.create(this.options.fetch)
+
+        options.method = 'PATCH';
+        options.body = this.body(type, data);
         if (this.options.verbose) console.info('Store.patch()', type, {
           type: type,
           data: data,
@@ -1431,7 +1459,7 @@ var ActionUI = function (exports) {
   var StoreJsonApi = /*#__PURE__*/function (_Store) {
     _inherits(StoreJsonApi, _Store);
 
-    var _super2 = _createSuper(StoreJsonApi);
+    var _super3 = _createSuper(StoreJsonApi);
 
     function StoreJsonApi(options) {
       _classCallCheck(this, StoreJsonApi);
@@ -1448,13 +1476,13 @@ var ActionUI = function (exports) {
         },
         'per_page': 0,
         'fetch': {
-          'headers': new Headers({
+          'headers': {
             'Content-Type': 'application/vnd.api+json'
-          })
+          }
         }
       };
       deepAssign(_options, options || {});
-      return _super2.call(this, _options);
+      return _super3.call(this, _options);
     }
 
     _createClass(StoreJsonApi, [{
@@ -1473,10 +1501,25 @@ var ActionUI = function (exports) {
       }
     }, {
       key: "body",
-      value: function body(data) {
-        return JSON.stringify({
-          data: data
-        });
+      value: function body(type, data) {
+        var id = data.id ? data.id : this.id(data);
+        var jsonapi = {};
+        jsonapi[this.options.keys.data] = {};
+        jsonapi[this.options.keys.data][this.options.keys.type] = type;
+        jsonapi[this.options.keys.data].attributes = {};
+        if (id) jsonapi[this.options.keys.data][this.options.keys.id] = id;
+
+        if (data[this.options.keys.data]) {
+          deepAssign(jsonapi[this.options.keys.data], data[this.options.keys.data]);
+        } else if (data.attributes) {
+          deepAssign(jsonapi[this.options.keys.data], data);
+        } else {
+          deepAssign(jsonapi[this.options.keys.data].attributes, data);
+        }
+
+        if (jsonapi[this.options.keys.data].attributes[this.options.keys.type]) delete jsonapi[this.options.keys.data].attributes[this.options.keys.type];
+        if (jsonapi[this.options.keys.data].attributes[this.options.keys.id]) delete jsonapi[this.options.keys.data].attributes[this.options.keys.id];
+        return _get(_getPrototypeOf(StoreJsonApi.prototype), "body", this).call(this, type, jsonapi);
       }
     }]);
 
@@ -1486,7 +1529,7 @@ var ActionUI = function (exports) {
   var StoreWordpress = /*#__PURE__*/function (_Store2) {
     _inherits(StoreWordpress, _Store2);
 
-    var _super3 = _createSuper(StoreWordpress);
+    var _super4 = _createSuper(StoreWordpress);
 
     function StoreWordpress(options) {
       _classCallCheck(this, StoreWordpress);
@@ -1512,7 +1555,7 @@ var ActionUI = function (exports) {
         per_page: 10
       };
       deepAssign(_options, options || {});
-      return _super3.call(this, _options);
+      return _super4.call(this, _options);
     }
 
     _createClass(StoreWordpress, [{
@@ -1718,7 +1761,7 @@ var ActionUI = function (exports) {
   var ViewFile = /*#__PURE__*/function (_View) {
     _inherits(ViewFile, _View);
 
-    var _super4 = _createSuper(ViewFile);
+    var _super5 = _createSuper(ViewFile);
 
     function ViewFile(name, file, model) {
       var _this13;
@@ -1734,7 +1777,7 @@ var ActionUI = function (exports) {
         file = name;
       }
 
-      _this13 = _super4.call(this, name, null, model);
+      _this13 = _super5.call(this, name, null, model);
       _this13.file = file;
       return _this13;
     }
@@ -1931,12 +1974,12 @@ var ActionUI = function (exports) {
   var ViewHandlebars = /*#__PURE__*/function (_ViewFile) {
     _inherits(ViewHandlebars, _ViewFile);
 
-    var _super5 = _createSuper(ViewHandlebars);
+    var _super6 = _createSuper(ViewHandlebars);
 
     function ViewHandlebars() {
       _classCallCheck(this, ViewHandlebars);
 
-      return _super5.apply(this, arguments);
+      return _super6.apply(this, arguments);
     }
 
     _createClass(ViewHandlebars, [{

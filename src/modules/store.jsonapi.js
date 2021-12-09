@@ -17,7 +17,7 @@ class StoreJsonApi extends Store
             },
             'per_page': 0,
             'fetch': {
-                'headers': new Headers({ 'Content-Type': 'application/vnd.api+json' })
+                'headers': { 'Content-Type': 'application/vnd.api+json' }
             }
         }
 
@@ -38,8 +38,33 @@ class StoreJsonApi extends Store
         return super.sync(json, url)
     }
 
-    body(data) {
-        return JSON.stringify({ data })
+    body(type, data)
+    {
+        let id = data.id ? data.id : this.id(data)
+		let jsonapi = {}
+		jsonapi[this.options.keys.data] = {}
+		jsonapi[this.options.keys.data][this.options.keys.type] = type
+		jsonapi[this.options.keys.data].attributes = {}
+
+		if (id) jsonapi[this.options.keys.data][this.options.keys.id] = id
+
+		if (data[this.options.keys.data])
+		{
+			Util.deepAssign(jsonapi[this.options.keys.data], data[this.options.keys.data])
+		}
+		else if (data.attributes)
+		{
+			Util.deepAssign(jsonapi[this.options.keys.data], data)
+		}
+        else
+        {
+			Util.deepAssign(jsonapi[this.options.keys.data].attributes, data)
+		}
+
+		if (jsonapi[this.options.keys.data].attributes[this.options.keys.type]) delete jsonapi[this.options.keys.data].attributes[this.options.keys.type]
+		if (jsonapi[this.options.keys.data].attributes[this.options.keys.id]) delete jsonapi[this.options.keys.data].attributes[this.options.keys.id]
+
+		return super.body(type, jsonapi)
     }
 
 }
