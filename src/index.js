@@ -1,5 +1,5 @@
 import * as Util from './modules/util.js'
-export { Action } from './modules/action.js'
+export { Action, ActionErrorCanceled } from './modules/action.js'
 export { Controller } from './modules/controller.js'
 export { JsonApi } from './modules/jsonapi.js'
 export { Store } from './modules/store.js'

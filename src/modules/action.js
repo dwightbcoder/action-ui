@@ -125,7 +125,9 @@ class Action
 		if (_options.verbose) console.info('Action.after()', this.name, { action: this, target: target, data: data, success: success, result: result })
 
 		this.running = false
+		var canceled = (result instanceof ActionErrorCanceled)
 		var cssClass = success ? _options.cssClass.success : _options.cssClass.fail
+		if (canceled) cssClass = _options.cssClass.canceled
 		Action.setCssClass(target, cssClass)
 		Action.reflectCssClass(this.name, cssClass)
 
@@ -142,7 +144,7 @@ class Action
 			data: data,
 			model: this.model,
 			error: (result instanceof Error) ? result : false,
-			canceled: (result instanceof ActionErrorCanceled)
+			canceled: canceled
 		})
 
 		target.dispatchEvent(eventAfter)
@@ -305,7 +307,7 @@ let _options = {
 	verbose: false,
 	autoCreate: true,
 	autoCache: true,
-	cssClass: { 'loading': 'loading', 'success': 'success', 'fail': 'fail' },
+	cssClass: { 'loading': 'loading', 'success': 'success', 'fail': 'fail', 'canceled': 'canceled' },
 	eventBefore: new CustomEvent('action.before', { bubbles: true, cancelable: true, detail: { type: 'before', name: null, data: null, model: null } }),
 	eventAfter: new CustomEvent('action.after', { bubbles: true, detail: { type: 'after', name: null, data: null, success: null, model: null } })
 }

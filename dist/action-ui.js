@@ -4,11 +4,11 @@ function _get() { if (typeof Reflect !== "undefined" && Reflect.get) { _get = Re
 
 function _superPropBase(object, property) { while (!Object.prototype.hasOwnProperty.call(object, property)) { object = _getPrototypeOf(object); if (object === null) break; } return object; }
 
-function _typeof(obj) { "@babel/helpers - typeof"; if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
-
 function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { Promise.resolve(value).then(_next, _throw); } }
 
 function _asyncToGenerator(fn) { return function () { var self = this, args = arguments; return new Promise(function (resolve, reject) { var gen = fn.apply(self, args); function _next(value) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value); } function _throw(err) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err); } _next(undefined); }); }; }
+
+function _typeof(obj) { "@babel/helpers - typeof"; if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
 
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function"); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, writable: true, configurable: true } }); if (superClass) _setPrototypeOf(subClass, superClass); }
 
@@ -489,7 +489,9 @@ var ActionUI = function (exports) {
           result: result
         });
         this.running = false;
+        var canceled = result instanceof ActionErrorCanceled;
         var cssClass = success ? _options.cssClass.success : _options.cssClass.fail;
+        if (canceled) cssClass = _options.cssClass.canceled;
         Action.setCssClass(target, cssClass);
         Action.reflectCssClass(this.name, cssClass);
 
@@ -504,7 +506,7 @@ var ActionUI = function (exports) {
           data: data,
           model: this.model,
           error: result instanceof Error ? result : false,
-          canceled: result instanceof ActionErrorCanceled
+          canceled: canceled
         });
         target.dispatchEvent(eventAfter);
         return result;
@@ -664,7 +666,8 @@ var ActionUI = function (exports) {
     cssClass: {
       'loading': 'loading',
       'success': 'success',
-      'fail': 'fail'
+      'fail': 'fail',
+      'canceled': 'canceled'
     },
     eventBefore: new CustomEvent('action.before', {
       bubbles: true,
@@ -1142,15 +1145,11 @@ var ActionUI = function (exports) {
           }) != _type) continue;
 
           for (var _id in this._model[_type]) {
-            var _match = true;
-
-            var _data = this.data(this._model[_type][_id]);
+            var _match = false;
+            var _data = this._model[_type][_id];
 
             for (var _term in query) {
-              if (_term != 'type' && (!_data.hasOwnProperty(_term) || _data[_term] != query[_term])) {
-                _match = false;
-                break;
-              }
+              _match = this.propertyValueExists(_data, _term, query[_term], 2);
             }
 
             if (_match) {
@@ -1160,6 +1159,22 @@ var ActionUI = function (exports) {
         }
 
         return results;
+      }
+    }, {
+      key: "propertyValueExists",
+      value: function propertyValueExists(data, property, value) {
+        var searchDepth = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : 1;
+        var keys = Object.keys(data);
+        if (keys.indexOf(property) > -1) return data[property] == value;
+        if (searchDepth <= 1) return false;
+
+        for (var _i2 = 0, _keys = keys; _i2 < _keys.length; _i2++) {
+          var key = _keys[_i2];
+
+          if ('object' == _typeof(data[key])) {
+            return this.propertyValueExists(data[key], property, value, searchDepth - 1);
+          }
+        }
       }
     }, {
       key: "fetch",
@@ -1332,7 +1347,7 @@ var ActionUI = function (exports) {
           return cache[type][size][_page2].sync({
             links: json.links || {},
             count: Object.keys(_this6.data(json)).length,
-            model: _this6.sync(json)
+            model: _this6.sync(json, url)
           });
         });
       }
@@ -1361,7 +1376,7 @@ var ActionUI = function (exports) {
             return response.ok ? json : Promise.reject(json);
           });
         }).then(function (json) {
-          return _this7.sync(json);
+          return _this7.sync(json, url);
         }).catch(function (error) {
           if (_this7.options.triggerChangesOnError) _this7.model(type).triggerChanges();
           return Promise.reject(error);
@@ -1394,7 +1409,7 @@ var ActionUI = function (exports) {
             return response.ok ? json : Promise.reject(json);
           });
         }).then(function (json) {
-          return _this8.sync(json);
+          return _this8.sync(json, url);
         }).catch(function (error) {
           if (_this8.options.triggerChangesOnError) _this8.model(type).triggerChanges();
           return Promise.reject(error);
@@ -2381,6 +2396,7 @@ var ActionUI = function (exports) {
     routes: {}
   };
   exports.Action = Action;
+  exports.ActionErrorCanceled = ActionErrorCanceled;
   exports.Controller = Controller;
   exports.JsonApi = JsonApi;
   exports.Model = Model;

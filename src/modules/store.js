@@ -4,7 +4,7 @@ import { Action } from './action.js'
 
 /**
  * Store
- * @version 20211203.1311
+ * @version 20211222.1527
  * @description Remote data store
  * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
  */
@@ -267,15 +267,11 @@ class Store
 
 			for (let _id in this._model[_type])
 			{
-				let _match = true
-				let _data = this.data(this._model[_type][_id])
+				let _match = false
+				let _data = this._model[_type][_id]
 				for (let _term in query)
 				{
-					if (_term != 'type' && (!_data.hasOwnProperty(_term) || _data[_term] != query[_term]))
-					{
-						_match = false
-						break
-					}
+					_match = this.propertyValueExists(_data, _term, query[_term], 2)
 				}
 
 				if (_match)
@@ -286,6 +282,21 @@ class Store
 		}
 
 		return results
+	}
+
+	propertyValueExists(data, property, value, searchDepth = 1)
+	{
+		var keys = Object.keys(data)
+		if (keys.indexOf(property) > -1) return data[property] == value
+		if ( searchDepth <= 1 ) return false
+
+		for (let key of keys)
+		{
+			if ('object' == typeof data[key])
+			{
+				return this.propertyValueExists(data[key], property, value, searchDepth - 1)
+			}
+		}
 	}
 
 	async fetch(type, id, query = {})
@@ -374,7 +385,7 @@ class Store
 				{
 					links: json.links || {},
 					count: Object.keys(this.data(json)).length,
-					model: this.sync(json)
+					model: this.sync(json, url)
 				}))
 	}
 
@@ -392,7 +403,7 @@ class Store
 
 		return fetch(url, options)
 			.then(response => response.json().then(json => response.ok ? json : Promise.reject(json)))
-			.then(json => this.sync(json))
+			.then(json => this.sync(json, url))
 			.catch(error =>
 			{
 				if (this.options.triggerChangesOnError) this.model(type).triggerChanges()
@@ -415,7 +426,7 @@ class Store
 
 		return fetch(url, options)
 			.then(response => response.json().then(json => response.ok ? json : Promise.reject(json)))
-			.then(json => this.sync(json))
+			.then(json => this.sync(json, url))
 			.catch(error =>
 			{
 				if (this.options.triggerChangesOnError) this.model(type).triggerChanges()

@@ -446,7 +446,9 @@ var ActionUI = (function (exports) {
 			if (_options.verbose) console.info('Action.after()', this.name, { action: this, target: target, data: data, success: success, result: result });
 
 			this.running = false;
+			var canceled = (result instanceof ActionErrorCanceled);
 			var cssClass = success ? _options.cssClass.success : _options.cssClass.fail;
+			if (canceled) cssClass = _options.cssClass.canceled;
 			Action.setCssClass(target, cssClass);
 			Action.reflectCssClass(this.name, cssClass);
 
@@ -463,7 +465,7 @@ var ActionUI = (function (exports) {
 				data: data,
 				model: this.model,
 				error: (result instanceof Error) ? result : false,
-				canceled: (result instanceof ActionErrorCanceled)
+				canceled: canceled
 			});
 
 			target.dispatchEvent(eventAfter);
@@ -626,7 +628,7 @@ var ActionUI = (function (exports) {
 		verbose: false,
 		autoCreate: true,
 		autoCache: true,
-		cssClass: { 'loading': 'loading', 'success': 'success', 'fail': 'fail' },
+		cssClass: { 'loading': 'loading', 'success': 'success', 'fail': 'fail', 'canceled': 'canceled' },
 		eventBefore: new CustomEvent('action.before', { bubbles: true, cancelable: true, detail: { type: 'before', name: null, data: null, model: null } }),
 		eventAfter: new CustomEvent('action.after', { bubbles: true, detail: { type: 'after', name: null, data: null, success: null, model: null } })
 	};
@@ -1050,15 +1052,11 @@ var ActionUI = (function (exports) {
 
 				for (let _id in this._model[_type])
 				{
-					let _match = true;
-					let _data = this.data(this._model[_type][_id]);
+					let _match = false;
+					let _data = this._model[_type][_id];
 					for (let _term in query)
 					{
-						if (_term != 'type' && (!_data.hasOwnProperty(_term) || _data[_term] != query[_term]))
-						{
-							_match = false;
-							break
-						}
+						_match = this.propertyValueExists(_data, _term, query[_term], 2);
 					}
 
 					if (_match)
@@ -1069,6 +1067,21 @@ var ActionUI = (function (exports) {
 			}
 
 			return results
+		}
+
+		propertyValueExists(data, property, value, searchDepth = 1)
+		{
+			var keys = Object.keys(data);
+			if (keys.indexOf(property) > -1) return data[property] == value
+			if ( searchDepth <= 1 ) return false
+
+			for (let key of keys)
+			{
+				if ('object' == typeof data[key])
+				{
+					return this.propertyValueExists(data[key], property, value, searchDepth - 1)
+				}
+			}
 		}
 
 		async fetch(type, id, query = {})
@@ -1157,7 +1170,7 @@ var ActionUI = (function (exports) {
 					{
 						links: json.links || {},
 						count: Object.keys(this.data(json)).length,
-						model: this.sync(json)
+						model: this.sync(json, url)
 					}))
 		}
 
@@ -1175,7 +1188,7 @@ var ActionUI = (function (exports) {
 
 			return fetch(url, options)
 				.then(response => response.json().then(json => response.ok ? json : Promise.reject(json)))
-				.then(json => this.sync(json))
+				.then(json => this.sync(json, url))
 				.catch(error =>
 				{
 					if (this.options.triggerChangesOnError) this.model(type).triggerChanges();
@@ -1198,7 +1211,7 @@ var ActionUI = (function (exports) {
 
 			return fetch(url, options)
 				.then(response => response.json().then(json => response.ok ? json : Promise.reject(json)))
-				.then(json => this.sync(json))
+				.then(json => this.sync(json, url))
 				.catch(error =>
 				{
 					if (this.options.triggerChangesOnError) this.model(type).triggerChanges();
@@ -2045,6 +2058,7 @@ var ActionUI = (function (exports) {
 	};
 
 	exports.Action = Action;
+	exports.ActionErrorCanceled = ActionErrorCanceled;
 	exports.Controller = Controller;
 	exports.JsonApi = JsonApi;
 	exports.Model = Model;
