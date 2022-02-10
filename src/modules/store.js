@@ -4,7 +4,7 @@ import { Action } from './action.js'
 
 /**
  * Store
- * @version 20211222.1527
+ * @version 202202078.1022
  * @description Remote data store
  * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
  */
@@ -20,6 +20,7 @@ class Store
 				'type': 'type',
 				'id': 'id'
 			},
+			'keysExcludeFromCache': [],
 			'per_page': 0,
 			'query': {
 				'page[number]': 'page[number]',
@@ -30,6 +31,7 @@ class Store
 				'headers': { 'Content-Type': 'application/json' },
 				'mode': 'no-cors'
 			},
+			'searchDepth': 1,
 			'triggerChangesOnError': true, // Allows views to update contents on failed requests, especially useful for Fetch All requests which return no results or 404
 			'verbose': false,
 			'viewClass': null,
@@ -50,6 +52,7 @@ class Store
 		Util.deepAssign(this.options, options || {})
 
 		this._model = new Model()
+		this._urlCache = {}
 		this._model._paging = {}
 
 		// Accept an array of store keys
@@ -93,7 +96,7 @@ class Store
 
 		if (!this._model[type])
 		{
-			this._model[type] = new Model({}, { model: this._model, property: type })
+			this._model[type] = new Model({_type:type}, { model: this._model, property: type })
 
 			this.actionCreate(type, 'get')
 			this.actionCreate(type, 'post')
@@ -108,7 +111,7 @@ class Store
 
 		if (id != null && ('string' == typeof id || 'number' == typeof id) && !this._model[type][id])
 		{
-			this._model[type][id] = new Model({}, { model: this._model[type], property: id })
+			this._model[type][id] = new Model({_type:type}, { model: this._model[type], property: id })
 		}
 	}
 
@@ -161,7 +164,7 @@ class Store
 		return json[this.options.keys.id]
 	}
 
-	sync(json, url)
+	sync(json, url, skipPaging = false)
 	{
 		let data = this.data(json)
 
@@ -191,6 +194,7 @@ class Store
 				_collection[this.id(data[i])] = this.sync(_data, url)
 			}
 
+			if (!skipPaging) this.syncPaging(json, url)
 			return _collection
 		}
 
@@ -230,6 +234,44 @@ class Store
 		return this._model[type][id]
 	}
 
+	syncPaging(json, url)
+	{
+		let pageData = this.pageData(url)
+
+		// Paging
+		if (pageData.type && pageData.pageSize && pageData.pageNumber)
+		{
+			let data = this.data(json)
+			if (Array.isArray(data))
+			{
+				let _model = this.model(pageData.type)
+				let _data = []
+				let _json = Util.deepCopy({}, pageData)
+
+				for (let _object of data)
+				{
+					_data.push({ id: _object[this.options.keys.id], type: _object[this.options.keys.type] })
+				}
+
+				_json.data = _data
+				_json.url = [url]
+
+				if (!_model._paging)
+					_model._paging = new Model({ current: null, type: pageData.type, pageNumber: pageData.pageNumber, pageSize: pageData.pageSize }, { model: _model, property: '_paging'})
+
+				if (!_model._paging[pageData.pageSize])
+					_model._paging[pageData.pageSize] = new Model({}, { model: _model._paging, property: pageData.pageSize})
+
+				if (!_model._paging[pageData.pageSize][pageData.pageNumber])
+					_model._paging[pageData.pageSize][pageData.pageNumber] = new Model({}, { model: _model._paging[pageData.pageSize], property: pageData.pageNumber})
+
+				_model._paging[pageData.pageSize][pageData.pageNumber].sync(_json)
+			}
+
+			return this.pageChange(pageData.type, pageData.pageNumber, pageData.pageSize)
+		}
+	}
+
 	url(options)
 	{
 		let type = this.options.types[options.type] || options.type
@@ -247,6 +289,7 @@ class Store
 				searchParams.set(i, options[i])
 			}
 		}
+		searchParams.sort()
 
 		let qs = searchParams.toString()
 		if (qs)
@@ -257,13 +300,37 @@ class Store
 		return url
 	}
 
+	urlParse(url)
+	{
+		if (!url)
+			return { url: null, type: null, pageNumber: false, pageSize: false }
+
+		if (url.indexOf('://') == -1)
+		{
+			if (url.indexOf('/') > 0) url = '/' + url
+			url = location.origin + url
+		}
+
+		let uri = new URL(url)
+		let parts = uri.pathname.replace(this.options.baseUrl, '').split('/')
+		let type = parts[0] || parts[1]
+		uri.searchParams.sort()
+
+		return {
+			url: uri,
+			type: type,
+			pageNumber: parseInt(uri.searchParams.get(this.options.query['page[number]'])),
+			pageSize: parseInt(uri.searchParams.get(this.options.query['page[size]']))
+		}
+	}
+
 	search(query)
 	{
 		let results = new Model()
 
 		for (let _type in this._model)
 		{
-			if (_type == '_paging' || (query.type && this.type({ type: query.type }) != _type)) continue
+			if (_type.indexOf('_') == 0 || (query.type && this.type({ type: query.type }) != _type)) continue
 
 			for (let _id in this._model[_type])
 			{
@@ -271,7 +338,7 @@ class Store
 				let _data = this._model[_type][_id]
 				for (let _term in query)
 				{
-					_match = this.propertyValueExists(_data, _term, query[_term], 2)
+					_match = this.propertyValueExists(_data, _term, query[_term], this.options.searchDepth)
 				}
 
 				if (_match)
@@ -302,6 +369,8 @@ class Store
 	async fetch(type, id, query = {})
 	{
 		type = this.type({ type: type })
+		query = query || {}
+		id = id || undefined
 
 		if (typeof id == 'object')
 		{
@@ -309,84 +378,115 @@ class Store
 			id = query.id
 		}
 
-		Object.assign(query, { type: type, id: id })
-		let url = this.url(query)
-
-		if (this._model[type])
-		{
-			if (id != undefined && this._model[type][id] && !(this._model[type][id].hasOwnProperty('_store') && this._model[type][id]._store.url.indexOf(url) == -1))
-			{
-				return Promise.resolve(this._model[type][id])
-			}
-			else if (id == undefined && Object.keys(query).length == 0)
-			{
-				return Promise.resolve(this._model[type])
-			}
-			else if (id == undefined)
-			{
-				let search = this.search(query)
-				if (Object.keys(search).length)
-				{
-					return Promise.resolve(search)
-				}
-			}
-		}
+		let url = this.url(Object.assign({}, query, { type: type, id: id }))
 
 		if (this.options.verbose)
 			console.info('Store.fetch()', type, id, { type: type, id: id, query: query, store: this, url: url, options: this.options.fetch })
 
+		return this.fetchUrl(url)
+	}
+
+	async fetchUrl(url)
+	{
+		if (!url) return Promise.reject()
+		let type = null
+
 		try
 		{
+			let parsedUrl = this.urlParse(url).url.toString()
+			let cached = this.urlCache(parsedUrl)
+
+			if (cached)
+			{
+				this.pageChange(cached.type, cached.pageNumber, cached.pageSize)
+				return Promise.resolve(cached.model)
+			}
+
 			const response = await fetch(url, this.options.fetch)
-			const json_1 = await response.json()
-			const json_2 = response.ok ? json_1 : Promise.reject(json_1)
-			return this.sync(json_2, url)
-		} catch (error)
+			const json = await response.json()
+			const json_2 = response.ok ? json : Promise.reject(json)
+
+			let model = this.sync(json_2, url)
+			cached = this.urlCache(parsedUrl, model, json_2)
+			type = cached.type
+			return model
+		}
+		catch (error)
 		{
-			if (this.options.triggerChangesOnError)
+			if (type && this.options.triggerChangesOnError)
 				this.model(type).triggerChanges()
 			return await Promise.reject(error)
 		}
 	}
 
-	page(type, page = 1, size = 0)
+	urlCache(url, model = null, json = null)
 	{
-		size = parseInt(size) || this.options.per_page
-		page = parseInt(page) || 1
+		url = decodeURIComponent(url)
 
-		let cache = this._model._paging
-
-		if ((type in cache) && (size in cache[type]) && (page in cache[type][size]))
+		if (!model && !json)
 		{
-			return Promise.resolve().then(() => cache[type][size][page])
-		}
-		else
-		{
-			if (!(type in cache)) cache[type] = {}
-			if (!(size in cache[type])) cache[type][size] = {}
-			if (!(page in cache[type][size])) cache[type][size][page] = new Model({
-				type: type,
-				number: page,
-				size: size,
-				count: 0,
-				links: {},
-				model: new Model()
-			})
+			return this._urlCache[url]
 		}
 
-		let url = this.url({ type: type, 'page[number]': page, 'page[size]': size })
+		let pageData = this.pageData(url)
+		let type = model[this.options.keys.type] || model._type || (pageData ? pageData.type : null)
 
-		if (this.options.verbose)
-			console.info('Store.page()', type, page, size, { type: type, page: page, size: size, store: this, url: url, options: options })
+		if (json)
+			for (let _key of this.options.keysExcludeFromCache) delete json[_key]
 
-		return fetch(url, this.options.fetch)
-			.then(response => response.json().then(json => response.ok ? json : Promise.reject(json)))
-			.then(json => cache[type][size][page].sync(
-				{
-					links: json.links || {},
-					count: Object.keys(this.data(json)).length,
-					model: this.sync(json, url)
-				}))
+		return this._urlCache[url] = {
+			url: url,
+			type: type,
+			model: model,
+			json: json,
+			pageNumber: (pageData ? pageData.pageNumber : false),
+			pageSize: (pageData ? pageData.pageSize : false)
+		}
+	}
+
+	pageData(url)
+	{
+		if (!url) return { type: null, pageNumber: false, pageSize: false }
+		let uri = this.urlParse(url)
+		let cached = this._urlCache[url]
+
+		return {
+			type: uri.type || (cached ? cached.type : null),
+			pageNumber: uri.pageNumber || (cached ? cached.pageNumber : false),
+			pageSize: uri.pageSize || (cached ? cached.pageSize : false),
+		}
+	}
+
+	paging(type)
+	{
+		return this.model(type)._paging || { current: false, pageNumber: false, pageSize: false }
+	}
+
+	async page(type, pageNumber = 1, pageSize = 0, query = {})
+	{
+		query = query || {}
+		pageSize = parseInt(pageSize) || this.options.per_page
+		pageNumber = parseInt(pageNumber) || 1
+
+		query.type = type
+		query[this.options.query['page[number]']] = pageNumber
+		query[this.options.query['page[size]']] = pageSize
+
+		return await this.fetch(type, 0, query)
+	}
+
+	pageChange(type, pageNumber, pageSize)
+	{
+		if (!type || !this._model[type]._paging || !this._model[type]._paging[pageSize][pageNumber])
+			return false
+
+		this._model[type]._paging.pageNumber = pageNumber
+		this._model[type]._paging.pageSize = pageSize
+
+		delete this._model[type]._paging.current
+		this._model[type]._paging.current = this._model[type]._paging[pageSize][pageNumber]
+
+		return this._model[type]._paging
 	}
 
 	post(type, data)

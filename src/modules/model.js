@@ -17,9 +17,9 @@ class Model
         this._watchers = []
 		this._timer = null
 		this._parent = parent //{ model: null, property: null }
-        this._privatize()
 
-        Util.deepAssign(this, data) // Pre-init required by IE11
+		Util.deepAssign(this, data) // Pre-init required by IE11
+		this._privatize()
 		this.sync(data)
 
         let proxySet = (target, prop, value) =>
@@ -32,7 +32,7 @@ class Model
 			}
 			else if (window.Reflect && window.Reflect.set)
 			{
-				if (value instanceof Object && !(value instanceof Model) && prop[0] != '_')
+				if (value instanceof Object && !Array.isArray(value) && !(value instanceof Model) && prop[0] != '_')
 				{
 					// Convert child objects to models with this target as parent
 					value = new Model(value, { model: target, property: prop })

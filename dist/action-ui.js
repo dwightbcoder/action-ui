@@ -10,6 +10,12 @@ function _asyncToGenerator(fn) { return function () { var self = this, args = ar
 
 function _typeof(obj) { "@babel/helpers - typeof"; if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
 
+function _createForOfIteratorHelper(o, allowArrayLike) { var it = typeof Symbol !== "undefined" && o[Symbol.iterator] || o["@@iterator"]; if (!it) { if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") { if (it) o = it; var i = 0; var F = function F() {}; return { s: F, n: function n() { if (i >= o.length) return { done: true }; return { done: false, value: o[i++] }; }, e: function e(_e) { throw _e; }, f: F }; } throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); } var normalCompletion = true, didErr = false, err; return { s: function s() { it = it.call(o); }, n: function n() { var step = it.next(); normalCompletion = step.done; return step; }, e: function e(_e2) { didErr = true; err = _e2; }, f: function f() { try { if (!normalCompletion && it.return != null) it.return(); } finally { if (didErr) throw err; } } }; }
+
+function _unsupportedIterableToArray(o, minLen) { if (!o) return; if (typeof o === "string") return _arrayLikeToArray(o, minLen); var n = Object.prototype.toString.call(o).slice(8, -1); if (n === "Object" && o.constructor) n = o.constructor.name; if (n === "Map" || n === "Set") return Array.from(o); if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen); }
+
+function _arrayLikeToArray(arr, len) { if (len == null || len > arr.length) len = arr.length; for (var i = 0, arr2 = new Array(len); i < len; i++) { arr2[i] = arr[i]; } return arr2; }
+
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function"); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, writable: true, configurable: true } }); if (superClass) _setPrototypeOf(subClass, superClass); }
 
 function _createSuper(Derived) { var hasNativeReflectConstruct = _isNativeReflectConstruct(); return function _createSuperInternal() { var Super = _getPrototypeOf(Derived), result; if (hasNativeReflectConstruct) { var NewTarget = _getPrototypeOf(this).constructor; result = Reflect.construct(Super, arguments, NewTarget); } else { result = Super.apply(this, arguments); } return _possibleConstructorReturn(this, result); }; }
@@ -47,18 +53,18 @@ var ActionUI = function (exports) {
     var dereference = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
 
     if (dereference) {
-      source = Object.assign({}, source);
+      source = Object.assign(Array.isArray(source) ? [] : {}, source);
     }
 
     for (var i in source) {
       if (source.hasOwnProperty(i)) {
         if (dereference && source[i] instanceof Object) {
-          source[i] = Object.assign({}, source[i]);
+          source[i] = Object.assign(Array.isArray(source[i]) ? [] : {}, source[i]);
         }
 
         if (target.hasOwnProperty(i)) {
           if (dereference && target[i] instanceof Object) {
-            target[i] = Object.assign({}, target[i]);
+            target[i] = Object.assign(Array.isArray(target[i]) ? [] : {}, target[i]);
           }
 
           if (target[i] instanceof Object && source[i] instanceof Object && !(target[i] instanceof Function || source[i] instanceof Function)) {
@@ -68,6 +74,10 @@ var ActionUI = function (exports) {
           }
         } else {
           target[i] = source[i];
+        }
+
+        if (Array.isArray(target[i]) && Array.isArray(source[i]) && source[i].length == 0 && target[i].length != 0) {
+          target[i] = [];
         }
       }
     }
@@ -177,9 +187,9 @@ var ActionUI = function (exports) {
       this._timer = null;
       this._parent = parent; //{ model: null, property: null }
 
-      this._privatize();
-
       deepAssign(this, data); // Pre-init required by IE11
+
+      this._privatize();
 
       this.sync(data);
 
@@ -189,7 +199,7 @@ var ActionUI = function (exports) {
         if (target[prop] && target[prop] instanceof Model) {
           target[prop].sync(value);
         } else if (window.Reflect && window.Reflect.set) {
-          if (value instanceof Object && !(value instanceof Model) && prop[0] != '_') {
+          if (value instanceof Object && !Array.isArray(value) && !(value instanceof Model) && prop[0] != '_') {
             // Convert child objects to models with this target as parent
             value = new Model(value, {
               model: target,
@@ -881,7 +891,7 @@ var ActionUI = function (exports) {
   }(Model);
   /**
    * Store
-   * @version 20211203.1311
+   * @version 202202078.1022
    * @description Remote data store
    * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
    */
@@ -899,6 +909,7 @@ var ActionUI = function (exports) {
           'type': 'type',
           'id': 'id'
         },
+        'keysExcludeFromCache': [],
         'per_page': 0,
         'query': {
           'page[number]': 'page[number]',
@@ -911,6 +922,7 @@ var ActionUI = function (exports) {
           },
           'mode': 'no-cors'
         },
+        'searchDepth': 1,
         'triggerChangesOnError': true,
         // Allows views to update contents on failed requests, especially useful for Fetch All requests which return no results or 404
         'verbose': false,
@@ -931,6 +943,7 @@ var ActionUI = function (exports) {
       };
       deepAssign(this.options, options || {});
       this._model = new Model();
+      this._urlCache = {};
       this._model._paging = {}; // Accept an array of store keys
 
       if (this.options.types instanceof Array) {
@@ -969,7 +982,9 @@ var ActionUI = function (exports) {
         if (!('string' == typeof type)) throw new Error('Store: Cannot create model without `type`');
 
         if (!this._model[type]) {
-          this._model[type] = new Model({}, {
+          this._model[type] = new Model({
+            _type: type
+          }, {
             model: this._model,
             property: type
           });
@@ -984,7 +999,9 @@ var ActionUI = function (exports) {
         }
 
         if (id != null && ('string' == typeof id || 'number' == typeof id) && !this._model[type][id]) {
-          this._model[type][id] = new Model({}, {
+          this._model[type][id] = new Model({
+            _type: type
+          }, {
             model: this._model[type],
             property: id
           });
@@ -1053,6 +1070,7 @@ var ActionUI = function (exports) {
     }, {
       key: "sync",
       value: function sync(json, url) {
+        var skipPaging = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
         var data = this.data(json);
 
         if (!data) {
@@ -1075,6 +1093,7 @@ var ActionUI = function (exports) {
             _collection[this.id(data[i])] = this.sync(_data, url);
           }
 
+          if (!skipPaging) this.syncPaging(json, url);
           return _collection;
         }
 
@@ -1112,6 +1131,65 @@ var ActionUI = function (exports) {
         return this._model[type][id];
       }
     }, {
+      key: "syncPaging",
+      value: function syncPaging(json, url) {
+        var pageData = this.pageData(url); // Paging
+
+        if (pageData.type && pageData.pageSize && pageData.pageNumber) {
+          var data = this.data(json);
+
+          if (Array.isArray(data)) {
+            var _model = this.model(pageData.type);
+
+            var _data = [];
+
+            var _json = deepCopy({}, pageData);
+
+            var _iterator = _createForOfIteratorHelper(data),
+                _step;
+
+            try {
+              for (_iterator.s(); !(_step = _iterator.n()).done;) {
+                var _object = _step.value;
+
+                _data.push({
+                  id: _object[this.options.keys.id],
+                  type: _object[this.options.keys.type]
+                });
+              }
+            } catch (err) {
+              _iterator.e(err);
+            } finally {
+              _iterator.f();
+            }
+
+            _json.data = _data;
+            _json.url = [url];
+            if (!_model._paging) _model._paging = new Model({
+              current: null,
+              type: pageData.type,
+              pageNumber: pageData.pageNumber,
+              pageSize: pageData.pageSize
+            }, {
+              model: _model,
+              property: '_paging'
+            });
+            if (!_model._paging[pageData.pageSize]) _model._paging[pageData.pageSize] = new Model({}, {
+              model: _model._paging,
+              property: pageData.pageSize
+            });
+            if (!_model._paging[pageData.pageSize][pageData.pageNumber]) _model._paging[pageData.pageSize][pageData.pageNumber] = new Model({}, {
+              model: _model._paging[pageData.pageSize],
+              property: pageData.pageNumber
+            });
+
+            _model._paging[pageData.pageSize][pageData.pageNumber].sync(_json);
+          }
+
+          return this.pageChange(pageData.type, pageData.pageNumber, pageData.pageSize);
+        }
+      }
+    }, {
       key: "url",
       value: function url(options) {
         var type = this.options.types[options.type] || options.type;
@@ -1126,6 +1204,7 @@ var ActionUI = function (exports) {
           }
         }
 
+        searchParams.sort();
         var qs = searchParams.toString();
 
         if (qs) {
@@ -1135,12 +1214,38 @@ var ActionUI = function (exports) {
         return url;
       }
     }, {
+      key: "urlParse",
+      value: function urlParse(url) {
+        if (!url) return {
+          url: null,
+          type: null,
+          pageNumber: false,
+          pageSize: false
+        };
+
+        if (url.indexOf('://') == -1) {
+          if (url.indexOf('/') > 0) url = '/' + url;
+          url = location.origin + url;
+        }
+
+        var uri = new URL(url);
+        var parts = uri.pathname.replace(this.options.baseUrl, '').split('/');
+        var type = parts[0] || parts[1];
+        uri.searchParams.sort();
+        return {
+          url: uri,
+          type: type,
+          pageNumber: parseInt(uri.searchParams.get(this.options.query['page[number]'])),
+          pageSize: parseInt(uri.searchParams.get(this.options.query['page[size]']))
+        };
+      }
+    }, {
       key: "search",
       value: function search(query) {
         var results = new Model();
 
         for (var _type in this._model) {
-          if (_type == '_paging' || query.type && this.type({
+          if (_type.indexOf('_') == 0 || query.type && this.type({
             type: query.type
           }) != _type) continue;
 
@@ -1149,7 +1254,7 @@ var ActionUI = function (exports) {
             var _data = this._model[_type][_id];
 
             for (var _term in query) {
-              _match = this.propertyValueExists(_data, _term, query[_term], 2);
+              _match = this.propertyValueExists(_data, _term, query[_term], this.options.searchDepth);
             }
 
             if (_match) {
@@ -1178,24 +1283,10 @@ var ActionUI = function (exports) {
       }
     }, {
       key: "fetch",
-      value: function (_fetch2) {
-        function fetch(_x3, _x4) {
-          return _fetch2.apply(this, arguments);
-        }
-
-        fetch.toString = function () {
-          return _fetch2.toString();
-        };
-
-        return fetch;
-      }( /*#__PURE__*/function () {
-        var _ref = _asyncToGenerator( /*#__PURE__*/regeneratorRuntime.mark(function _callee(type, id) {
+      value: function () {
+        var _fetch2 = _asyncToGenerator( /*#__PURE__*/regeneratorRuntime.mark(function _callee(type, id) {
           var query,
               url,
-              search,
-              response,
-              json_1,
-              json_2,
               _args = arguments;
           return regeneratorRuntime.wrap(function _callee$(_context) {
             while (1) {
@@ -1205,54 +1296,18 @@ var ActionUI = function (exports) {
                   type = this.type({
                     type: type
                   });
+                  query = query || {};
+                  id = id || undefined;
 
                   if (_typeof(id) == 'object') {
                     query = id;
                     id = query.id;
                   }
 
-                  Object.assign(query, {
+                  url = this.url(Object.assign({}, query, {
                     type: type,
                     id: id
-                  });
-                  url = this.url(query);
-
-                  if (!this._model[type]) {
-                    _context.next = 18;
-                    break;
-                  }
-
-                  if (!(id != undefined && this._model[type][id] && !(this._model[type][id].hasOwnProperty('_store') && this._model[type][id]._store.url.indexOf(url) == -1))) {
-                    _context.next = 10;
-                    break;
-                  }
-
-                  return _context.abrupt("return", Promise.resolve(this._model[type][id]));
-
-                case 10:
-                  if (!(id == undefined && Object.keys(query).length == 0)) {
-                    _context.next = 14;
-                    break;
-                  }
-
-                  return _context.abrupt("return", Promise.resolve(this._model[type]));
-
-                case 14:
-                  if (!(id == undefined)) {
-                    _context.next = 18;
-                    break;
-                  }
-
-                  search = this.search(query);
-
-                  if (!Object.keys(search).length) {
-                    _context.next = 18;
-                    break;
-                  }
-
-                  return _context.abrupt("return", Promise.resolve(search));
-
-                case 18:
+                  }));
                   if (this.options.verbose) console.info('Store.fetch()', type, id, {
                     type: type,
                     id: id,
@@ -1261,100 +1316,212 @@ var ActionUI = function (exports) {
                     url: url,
                     options: this.options.fetch
                   });
-                  _context.prev = 19;
-                  _context.next = 22;
-                  return fetch(url, this.options.fetch);
+                  return _context.abrupt("return", this.fetchUrl(url));
 
-                case 22:
-                  response = _context.sent;
-                  _context.next = 25;
-                  return response.json();
-
-                case 25:
-                  json_1 = _context.sent;
-                  json_2 = response.ok ? json_1 : Promise.reject(json_1);
-                  return _context.abrupt("return", this.sync(json_2, url));
-
-                case 30:
-                  _context.prev = 30;
-                  _context.t0 = _context["catch"](19);
-                  if (this.options.triggerChangesOnError) this.model(type).triggerChanges();
-                  _context.next = 35;
-                  return Promise.reject(_context.t0);
-
-                case 35:
-                  return _context.abrupt("return", _context.sent);
-
-                case 36:
+                case 8:
                 case "end":
                   return _context.stop();
               }
             }
-          }, _callee, this, [[19, 30]]);
+          }, _callee, this);
         }));
 
-        return function (_x5, _x6) {
-          return _ref.apply(this, arguments);
-        };
-      }())
-    }, {
-      key: "page",
-      value: function page(type) {
-        var _this6 = this;
-
-        var _page2 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 1;
-
-        var size = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
-        size = parseInt(size) || this.options.per_page;
-        _page2 = parseInt(_page2) || 1;
-        var cache = this._model._paging;
-
-        if (type in cache && size in cache[type] && _page2 in cache[type][size]) {
-          return Promise.resolve().then(function () {
-            return cache[type][size][_page2];
-          });
-        } else {
-          if (!(type in cache)) cache[type] = {};
-          if (!(size in cache[type])) cache[type][size] = {};
-          if (!(_page2 in cache[type][size])) cache[type][size][_page2] = new Model({
-            type: type,
-            number: _page2,
-            size: size,
-            count: 0,
-            links: {},
-            model: new Model()
-          });
+        function fetch(_x3, _x4) {
+          return _fetch2.apply(this, arguments);
         }
 
-        var url = this.url({
-          type: type,
-          'page[number]': _page2,
-          'page[size]': size
-        });
-        if (this.options.verbose) console.info('Store.page()', type, _page2, size, {
-          type: type,
-          page: _page2,
-          size: size,
-          store: this,
+        return fetch;
+      }()
+    }, {
+      key: "fetchUrl",
+      value: function () {
+        var _fetchUrl = _asyncToGenerator( /*#__PURE__*/regeneratorRuntime.mark(function _callee2(url) {
+          var type, parsedUrl, cached, response, json, json_2, model;
+          return regeneratorRuntime.wrap(function _callee2$(_context2) {
+            while (1) {
+              switch (_context2.prev = _context2.next) {
+                case 0:
+                  if (url) {
+                    _context2.next = 2;
+                    break;
+                  }
+
+                  return _context2.abrupt("return", Promise.reject());
+
+                case 2:
+                  type = null;
+                  _context2.prev = 3;
+                  parsedUrl = this.urlParse(url).url.toString();
+                  cached = this.urlCache(parsedUrl);
+
+                  if (!cached) {
+                    _context2.next = 9;
+                    break;
+                  }
+
+                  this.pageChange(cached.type, cached.pageNumber, cached.pageSize);
+                  return _context2.abrupt("return", Promise.resolve(cached.model));
+
+                case 9:
+                  _context2.next = 11;
+                  return fetch(url, this.options.fetch);
+
+                case 11:
+                  response = _context2.sent;
+                  _context2.next = 14;
+                  return response.json();
+
+                case 14:
+                  json = _context2.sent;
+                  json_2 = response.ok ? json : Promise.reject(json);
+                  model = this.sync(json_2, url);
+                  cached = this.urlCache(parsedUrl, model, json_2);
+                  type = cached.type;
+                  return _context2.abrupt("return", model);
+
+                case 22:
+                  _context2.prev = 22;
+                  _context2.t0 = _context2["catch"](3);
+                  if (type && this.options.triggerChangesOnError) this.model(type).triggerChanges();
+                  _context2.next = 27;
+                  return Promise.reject(_context2.t0);
+
+                case 27:
+                  return _context2.abrupt("return", _context2.sent);
+
+                case 28:
+                case "end":
+                  return _context2.stop();
+              }
+            }
+          }, _callee2, this, [[3, 22]]);
+        }));
+
+        function fetchUrl(_x5) {
+          return _fetchUrl.apply(this, arguments);
+        }
+
+        return fetchUrl;
+      }()
+    }, {
+      key: "urlCache",
+      value: function urlCache(url) {
+        var model = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : null;
+        var json = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : null;
+        url = decodeURIComponent(url);
+
+        if (!model && !json) {
+          return this._urlCache[url];
+        }
+
+        var pageData = this.pageData(url);
+        var type = model[this.options.keys.type] || model._type || (pageData ? pageData.type : null);
+
+        if (json) {
+          var _iterator2 = _createForOfIteratorHelper(this.options.keysExcludeFromCache),
+              _step2;
+
+          try {
+            for (_iterator2.s(); !(_step2 = _iterator2.n()).done;) {
+              var _key = _step2.value;
+              delete json[_key];
+            }
+          } catch (err) {
+            _iterator2.e(err);
+          } finally {
+            _iterator2.f();
+          }
+        }
+
+        return this._urlCache[url] = {
           url: url,
-          options: options
-        });
-        return fetch(url, this.options.fetch).then(function (response) {
-          return response.json().then(function (json) {
-            return response.ok ? json : Promise.reject(json);
-          });
-        }).then(function (json) {
-          return cache[type][size][_page2].sync({
-            links: json.links || {},
-            count: Object.keys(_this6.data(json)).length,
-            model: _this6.sync(json, url)
-          });
-        });
+          type: type,
+          model: model,
+          json: json,
+          pageNumber: pageData ? pageData.pageNumber : false,
+          pageSize: pageData ? pageData.pageSize : false
+        };
+      }
+    }, {
+      key: "pageData",
+      value: function pageData(url) {
+        if (!url) return {
+          type: null,
+          pageNumber: false,
+          pageSize: false
+        };
+        var uri = this.urlParse(url);
+        var cached = this._urlCache[url];
+        return {
+          type: uri.type || (cached ? cached.type : null),
+          pageNumber: uri.pageNumber || (cached ? cached.pageNumber : false),
+          pageSize: uri.pageSize || (cached ? cached.pageSize : false)
+        };
+      }
+    }, {
+      key: "paging",
+      value: function paging(type) {
+        return this.model(type)._paging || {
+          current: false,
+          pageNumber: false,
+          pageSize: false
+        };
+      }
+    }, {
+      key: "page",
+      value: function () {
+        var _page2 = _asyncToGenerator( /*#__PURE__*/regeneratorRuntime.mark(function _callee3(type) {
+          var pageNumber,
+              pageSize,
+              query,
+              _args3 = arguments;
+          return regeneratorRuntime.wrap(function _callee3$(_context3) {
+            while (1) {
+              switch (_context3.prev = _context3.next) {
+                case 0:
+                  pageNumber = _args3.length > 1 && _args3[1] !== undefined ? _args3[1] : 1;
+                  pageSize = _args3.length > 2 && _args3[2] !== undefined ? _args3[2] : 0;
+                  query = _args3.length > 3 && _args3[3] !== undefined ? _args3[3] : {};
+                  query = query || {};
+                  pageSize = parseInt(pageSize) || this.options.per_page;
+                  pageNumber = parseInt(pageNumber) || 1;
+                  query.type = type;
+                  query[this.options.query['page[number]']] = pageNumber;
+                  query[this.options.query['page[size]']] = pageSize;
+                  _context3.next = 11;
+                  return this.fetch(type, 0, query);
+
+                case 11:
+                  return _context3.abrupt("return", _context3.sent);
+
+                case 12:
+                case "end":
+                  return _context3.stop();
+              }
+            }
+          }, _callee3, this);
+        }));
+
+        function page(_x6) {
+          return _page2.apply(this, arguments);
+        }
+
+        return page;
+      }()
+    }, {
+      key: "pageChange",
+      value: function pageChange(type, pageNumber, pageSize) {
+        if (!type || !this._model[type]._paging || !this._model[type]._paging[pageSize][pageNumber]) return false;
+        this._model[type]._paging.pageNumber = pageNumber;
+        this._model[type]._paging.pageSize = pageSize;
+        delete this._model[type]._paging.current;
+        this._model[type]._paging.current = this._model[type]._paging[pageSize][pageNumber];
+        return this._model[type]._paging;
       }
     }, {
       key: "post",
       value: function post(type, data) {
-        var _this7 = this;
+        var _this6 = this;
 
         type = type || this.type(data);
         var url = this.url({
@@ -1376,16 +1543,16 @@ var ActionUI = function (exports) {
             return response.ok ? json : Promise.reject(json);
           });
         }).then(function (json) {
-          return _this7.sync(json, url);
+          return _this6.sync(json, url);
         }).catch(function (error) {
-          if (_this7.options.triggerChangesOnError) _this7.model(type).triggerChanges();
+          if (_this6.options.triggerChangesOnError) _this6.model(type).triggerChanges();
           return Promise.reject(error);
         });
       }
     }, {
       key: "patch",
       value: function patch(type, data) {
-        var _this8 = this;
+        var _this7 = this;
 
         type = type || this.type(data);
         var url = this.url({
@@ -1409,16 +1576,16 @@ var ActionUI = function (exports) {
             return response.ok ? json : Promise.reject(json);
           });
         }).then(function (json) {
-          return _this8.sync(json, url);
+          return _this7.sync(json, url);
         }).catch(function (error) {
-          if (_this8.options.triggerChangesOnError) _this8.model(type).triggerChanges();
+          if (_this7.options.triggerChangesOnError) _this7.model(type).triggerChanges();
           return Promise.reject(error);
         });
       }
     }, {
       key: "delete",
       value: function _delete(type, id) {
-        var _this9 = this;
+        var _this8 = this;
 
         var options = Object.create(this.options.fetch);
         options.method = 'DELETE';
@@ -1438,10 +1605,10 @@ var ActionUI = function (exports) {
             return response.ok ? json : Promise.reject(json);
           });
         }).then(function (json) {
-          delete _this9._model[type][id];
+          delete _this8._model[type][id];
           return json;
         }).catch(function (error) {
-          if (_this9.options.triggerChangesOnError) _this9.model(type).triggerChanges();
+          if (_this8.options.triggerChangesOnError) _this8.model(type).triggerChanges();
           return Promise.reject(error);
         });
       }
@@ -1485,8 +1652,12 @@ var ActionUI = function (exports) {
         'keys': {
           'data': 'data',
           'type': 'type',
-          'id': 'id'
+          'id': 'id',
+          'links': 'links',
+          'meta': 'meta',
+          'included': 'included'
         },
+        'keysExcludeFromCache': ['data', 'included'],
         'query': {
           'page[number]': 'page[number]',
           'page[size]': 'page[size]'
@@ -1496,7 +1667,8 @@ var ActionUI = function (exports) {
           'headers': {
             'Content-Type': 'application/vnd.api+json'
           }
-        }
+        },
+        'searchDepth': 2
       };
       deepAssign(_options, options || {});
       return _super3.call(this, _options);
@@ -1505,16 +1677,30 @@ var ActionUI = function (exports) {
     _createClass(StoreJsonApi, [{
       key: "sync",
       value: function sync(json, url) {
-        if (json['included']) {
-          var _keyData = this.options.keys.data;
-          this.options.keys.data = 'included';
+        var skipPaging = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
 
-          _get(_getPrototypeOf(StoreJsonApi.prototype), "sync", this).call(this, json, url);
+        if (json[this.options.keys.included]) {
+          var _keyData = this.options.keys.data;
+          this.options.keys.data = this.options.keys.included;
+
+          _get(_getPrototypeOf(StoreJsonApi.prototype), "sync", this).call(this, json, url, true);
 
           this.options.keys.data = _keyData;
         }
 
-        return _get(_getPrototypeOf(StoreJsonApi.prototype), "sync", this).call(this, json, url);
+        return _get(_getPrototypeOf(StoreJsonApi.prototype), "sync", this).call(this, json, url, skipPaging);
+      }
+    }, {
+      key: "syncPaging",
+      value: function syncPaging(json, url) {
+        var paging = _get(_getPrototypeOf(StoreJsonApi.prototype), "syncPaging", this).call(this, json, url);
+
+        if (paging && paging.current) {
+          paging.current[this.options.keys.links] = json[this.options.keys.links];
+          paging.current[this.options.keys.meta] = json[this.options.keys.meta];
+        }
+
+        return paging;
       }
     }, {
       key: "body",
@@ -1600,7 +1786,7 @@ var ActionUI = function (exports) {
 
   var View = /*#__PURE__*/function () {
     function View(name, html, model) {
-      var _this10 = this;
+      var _this9 = this;
 
       _classCallCheck(this, View);
 
@@ -1620,7 +1806,7 @@ var ActionUI = function (exports) {
       this._html = html;
       this._model = model;
       model.watch(function (changes) {
-        return _this10.update(changes);
+        return _this9.update(changes);
       });
 
       if (this.constructor.options.autoCache) {
@@ -1655,7 +1841,7 @@ var ActionUI = function (exports) {
     }, {
       key: "render",
       value: function render() {
-        var _this11 = this;
+        var _this10 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
           view: this
@@ -1665,18 +1851,18 @@ var ActionUI = function (exports) {
           view: this
         });
         document.querySelectorAll('[ui-view="' + this._name + '"]').forEach(function (_target) {
-          _target.innerHTML = _this11.html;
+          _target.innerHTML = _this10.html;
 
-          _target.dispatchEvent(_this11.constructor.options.eventRender);
+          _target.dispatchEvent(_this10.constructor.options.eventRender);
 
-          _this11.renderSubviews(_target);
+          _this10.renderSubviews(_target);
         });
         return Promise.resolve();
       }
     }, {
       key: "renderSubviews",
       value: function renderSubviews(parent) {
-        var _this12 = this;
+        var _this11 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.renderSubviews()', this.name, {
           view: this,
@@ -1685,7 +1871,7 @@ var ActionUI = function (exports) {
         parent.querySelectorAll('[ui-view]').forEach(function (_sub) {
           var viewName = _sub.getAttribute('ui-view');
 
-          var view = _this12.constructor.cache(viewName);
+          var view = _this11.constructor.cache(viewName);
 
           if (view) {
             view.render();
@@ -1781,7 +1967,7 @@ var ActionUI = function (exports) {
     var _super5 = _createSuper(ViewFile);
 
     function ViewFile(name, file, model) {
-      var _this13;
+      var _this12;
 
       _classCallCheck(this, ViewFile);
 
@@ -1794,9 +1980,9 @@ var ActionUI = function (exports) {
         file = name;
       }
 
-      _this13 = _super5.call(this, name, null, model);
-      _this13.file = file;
-      return _this13;
+      _this12 = _super5.call(this, name, null, model);
+      _this12.file = file;
+      return _this12;
     }
 
     _createClass(ViewFile, [{
@@ -1808,7 +1994,7 @@ var ActionUI = function (exports) {
     }, {
       key: "render",
       value: function render() {
-        var _this14 = this;
+        var _this13 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
           view: this
@@ -1817,7 +2003,7 @@ var ActionUI = function (exports) {
         var _promise = this._html == null ? this.fetch() : Promise.resolve();
 
         return _promise.then(function () {
-          return _get(_getPrototypeOf(ViewFile.prototype), "render", _this14).call(_this14);
+          return _get(_getPrototypeOf(ViewFile.prototype), "render", _this13).call(_this13);
         });
       }
     }, {
@@ -1833,7 +2019,7 @@ var ActionUI = function (exports) {
 
         return fetch;
       }(function () {
-        var _this15 = this;
+        var _this14 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.fetch()', this.name, {
           view: this
@@ -1846,27 +2032,27 @@ var ActionUI = function (exports) {
             throw new Error(response.statusText);
           }
         }).then(function (html) {
-          _this15._html = html;
+          _this14._html = html;
 
-          _this15.fetchAfter(true);
+          _this14.fetchAfter(true);
 
-          return _this15._html;
+          return _this14._html;
         }).catch(function (e) {
-          _this15.fetchAfter(false);
+          _this14.fetchAfter(false);
 
-          throw new Error('File not found: ' + _this15.fileName);
+          throw new Error('File not found: ' + _this14.fileName);
         });
       })
     }, {
       key: "fetchBefore",
       value: function fetchBefore() {
-        var _this16 = this;
+        var _this15 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.fetchBefore()', this.name, {
           view: this
         });
         document.querySelectorAll('[ui-view="' + this._name + '"]').forEach(function (target) {
-          _this16.constructor.setCssClass(target, _options$2.cssClass.loading);
+          _this15.constructor.setCssClass(target, _options$2.cssClass.loading);
         });
 
         if (this.constructor.options.eventFetch) {
@@ -1880,13 +2066,13 @@ var ActionUI = function (exports) {
     }, {
       key: "fetchAfter",
       value: function fetchAfter(success) {
-        var _this17 = this;
+        var _this16 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.fetchAfter()', this.name, {
           view: this
         });
         document.querySelectorAll('[ui-view="' + this._name + '"]').forEach(function (target) {
-          _this17.constructor.setCssClass(target, success ? _options$2.cssClass.success : _options$2.cssClass.fail);
+          _this16.constructor.setCssClass(target, success ? _options$2.cssClass.success : _options$2.cssClass.fail);
         });
 
         if (this.constructor.options.eventFetch) {
@@ -2002,7 +2188,7 @@ var ActionUI = function (exports) {
     _createClass(ViewHandlebars, [{
       key: "render",
       value: function render() {
-        var _this18 = this;
+        var _this17 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
           view: this
@@ -2015,18 +2201,18 @@ var ActionUI = function (exports) {
         }
 
         return _promise.then(function () {
-          return _get(_getPrototypeOf(ViewHandlebars.prototype), "render", _this18).call(_this18);
+          return _get(_getPrototypeOf(ViewHandlebars.prototype), "render", _this17).call(_this17);
         });
       }
     }, {
       key: "fetch",
       value: function fetch() {
-        var _this19 = this;
+        var _this18 = this;
 
         return _get(_getPrototypeOf(ViewHandlebars.prototype), "fetch", this).call(this).then(function (html) {
           if (!('templates' in Handlebars)) Handlebars.templates = [];
-          Handlebars.templates[_this19.file] = Handlebars.compile(html);
-          _this19.html = Handlebars.templates[_this19.file];
+          Handlebars.templates[_this18.file] = Handlebars.compile(html);
+          _this18.html = Handlebars.templates[_this18.file];
           return html;
         });
       } // #region Static methods
@@ -2107,7 +2293,7 @@ var ActionUI = function (exports) {
     }, {
       key: "navigate",
       value: function navigate(route) {
-        var _this20 = this;
+        var _this19 = this;
 
         var data = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
         var event = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : null;
@@ -2218,11 +2404,11 @@ var ActionUI = function (exports) {
           var viewContainer = document.querySelectorAll('[ui-view="' + this.view.name + '"]');
           this.handleLoading(viewContainer, true);
           result.then(function () {
-            return _this20.handleLoading(viewContainer, false);
+            return _this19.handleLoading(viewContainer, false);
           }).catch(function (e) {
-            _this20.handleLoading(viewContainer, false);
+            _this19.handleLoading(viewContainer, false);
 
-            _this20.handleError(controller, model, path, e);
+            _this19.handleError(controller, model, path, e);
 
             throw e;
           });

@@ -7,7 +7,7 @@ function deepAssign(target, source, dereference = false)
 {
 	if (dereference)
 	{
-		source = Object.assign({}, source)
+		source = Object.assign(Array.isArray(source) ? [] : {}, source)
 	}
 
 	for (let i in source)
@@ -16,14 +16,14 @@ function deepAssign(target, source, dereference = false)
 		{
 			if (dereference && source[i] instanceof Object)
 			{
-				source[i] = Object.assign({}, source[i])
+				source[i] = Object.assign(Array.isArray(source[i]) ? [] : {}, source[i])
 			}
 
 			if (target.hasOwnProperty(i))
 			{
 				if (dereference && target[i] instanceof Object)
 				{
-					target[i] = Object.assign({}, target[i])
+					target[i] = Object.assign(Array.isArray(target[i]) ? [] : {}, target[i])
 				}
 
 				if (target[i] instanceof Object && source[i] instanceof Object && !(target[i] instanceof Function || source[i] instanceof Function))
@@ -38,6 +38,11 @@ function deepAssign(target, source, dereference = false)
 			else
 			{
 				target[i] = source[i]
+			}
+
+			if (Array.isArray(target[i]) && Array.isArray(source[i]) && source[i].length == 0 && target[i].length != 0)
+			{
+				target[i] = []
 			}
 		}
 	}

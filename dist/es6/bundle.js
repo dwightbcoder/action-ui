@@ -10,7 +10,7 @@ var ActionUI = (function (exports) {
 	{
 		if (dereference)
 		{
-			source = Object.assign({}, source);
+			source = Object.assign(Array.isArray(source) ? [] : {}, source);
 		}
 
 		for (let i in source)
@@ -19,14 +19,14 @@ var ActionUI = (function (exports) {
 			{
 				if (dereference && source[i] instanceof Object)
 				{
-					source[i] = Object.assign({}, source[i]);
+					source[i] = Object.assign(Array.isArray(source[i]) ? [] : {}, source[i]);
 				}
 
 				if (target.hasOwnProperty(i))
 				{
 					if (dereference && target[i] instanceof Object)
 					{
-						target[i] = Object.assign({}, target[i]);
+						target[i] = Object.assign(Array.isArray(target[i]) ? [] : {}, target[i]);
 					}
 
 					if (target[i] instanceof Object && source[i] instanceof Object && !(target[i] instanceof Function || source[i] instanceof Function))
@@ -41,6 +41,11 @@ var ActionUI = (function (exports) {
 				else
 				{
 					target[i] = source[i];
+				}
+
+				if (Array.isArray(target[i]) && Array.isArray(source[i]) && source[i].length == 0 && target[i].length != 0)
+				{
+					target[i] = [];
 				}
 			}
 		}
@@ -161,9 +166,9 @@ var ActionUI = (function (exports) {
 	        this._watchers = [];
 			this._timer = null;
 			this._parent = parent; //{ model: null, property: null }
-	        this._privatize();
 
-	        deepAssign(this, data); // Pre-init required by IE11
+			deepAssign(this, data); // Pre-init required by IE11
+			this._privatize();
 			this.sync(data);
 
 	        let proxySet = (target, prop, value) =>
@@ -176,7 +181,7 @@ var ActionUI = (function (exports) {
 				}
 				else if (window.Reflect && window.Reflect.set)
 				{
-					if (value instanceof Object && !(value instanceof Model) && prop[0] != '_')
+					if (value instanceof Object && !Array.isArray(value) && !(value instanceof Model) && prop[0] != '_')
 					{
 						// Convert child objects to models with this target as parent
 						value = new Model(value, { model: target, property: prop });
@@ -789,7 +794,7 @@ var ActionUI = (function (exports) {
 
 	/**
 	 * Store
-	 * @version 20211203.1311
+	 * @version 202202078.1022
 	 * @description Remote data store
 	 * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
 	 */
@@ -805,6 +810,7 @@ var ActionUI = (function (exports) {
 					'type': 'type',
 					'id': 'id'
 				},
+				'keysExcludeFromCache': [],
 				'per_page': 0,
 				'query': {
 					'page[number]': 'page[number]',
@@ -815,6 +821,7 @@ var ActionUI = (function (exports) {
 					'headers': { 'Content-Type': 'application/json' },
 					'mode': 'no-cors'
 				},
+				'searchDepth': 1,
 				'triggerChangesOnError': true, // Allows views to update contents on failed requests, especially useful for Fetch All requests which return no results or 404
 				'verbose': false,
 				'viewClass': null,
@@ -835,6 +842,7 @@ var ActionUI = (function (exports) {
 			deepAssign(this.options, options || {});
 
 			this._model = new Model();
+			this._urlCache = {};
 			this._model._paging = {};
 
 			// Accept an array of store keys
@@ -878,7 +886,7 @@ var ActionUI = (function (exports) {
 
 			if (!this._model[type])
 			{
-				this._model[type] = new Model({}, { model: this._model, property: type });
+				this._model[type] = new Model({_type:type}, { model: this._model, property: type });
 
 				this.actionCreate(type, 'get');
 				this.actionCreate(type, 'post');
@@ -893,7 +901,7 @@ var ActionUI = (function (exports) {
 
 			if (id != null && ('string' == typeof id || 'number' == typeof id) && !this._model[type][id])
 			{
-				this._model[type][id] = new Model({}, { model: this._model[type], property: id });
+				this._model[type][id] = new Model({_type:type}, { model: this._model[type], property: id });
 			}
 		}
 
@@ -946,7 +954,7 @@ var ActionUI = (function (exports) {
 			return json[this.options.keys.id]
 		}
 
-		sync(json, url)
+		sync(json, url, skipPaging = false)
 		{
 			let data = this.data(json);
 
@@ -976,6 +984,7 @@ var ActionUI = (function (exports) {
 					_collection[this.id(data[i])] = this.sync(_data, url);
 				}
 
+				if (!skipPaging) this.syncPaging(json, url);
 				return _collection
 			}
 
@@ -1015,6 +1024,44 @@ var ActionUI = (function (exports) {
 			return this._model[type][id]
 		}
 
+		syncPaging(json, url)
+		{
+			let pageData = this.pageData(url);
+
+			// Paging
+			if (pageData.type && pageData.pageSize && pageData.pageNumber)
+			{
+				let data = this.data(json);
+				if (Array.isArray(data))
+				{
+					let _model = this.model(pageData.type);
+					let _data = [];
+					let _json = deepCopy({}, pageData);
+
+					for (let _object of data)
+					{
+						_data.push({ id: _object[this.options.keys.id], type: _object[this.options.keys.type] });
+					}
+
+					_json.data = _data;
+					_json.url = [url];
+
+					if (!_model._paging)
+						_model._paging = new Model({ current: null, type: pageData.type, pageNumber: pageData.pageNumber, pageSize: pageData.pageSize }, { model: _model, property: '_paging'});
+
+					if (!_model._paging[pageData.pageSize])
+						_model._paging[pageData.pageSize] = new Model({}, { model: _model._paging, property: pageData.pageSize});
+
+					if (!_model._paging[pageData.pageSize][pageData.pageNumber])
+						_model._paging[pageData.pageSize][pageData.pageNumber] = new Model({}, { model: _model._paging[pageData.pageSize], property: pageData.pageNumber});
+
+					_model._paging[pageData.pageSize][pageData.pageNumber].sync(_json);
+				}
+
+				return this.pageChange(pageData.type, pageData.pageNumber, pageData.pageSize)
+			}
+		}
+
 		url(options)
 		{
 			let type = this.options.types[options.type] || options.type;
@@ -1032,6 +1079,7 @@ var ActionUI = (function (exports) {
 					searchParams.set(i, options[i]);
 				}
 			}
+			searchParams.sort();
 
 			let qs = searchParams.toString();
 			if (qs)
@@ -1042,13 +1090,37 @@ var ActionUI = (function (exports) {
 			return url
 		}
 
+		urlParse(url)
+		{
+			if (!url)
+				return { url: null, type: null, pageNumber: false, pageSize: false }
+
+			if (url.indexOf('://') == -1)
+			{
+				if (url.indexOf('/') > 0) url = '/' + url;
+				url = location.origin + url;
+			}
+
+			let uri = new URL(url);
+			let parts = uri.pathname.replace(this.options.baseUrl, '').split('/');
+			let type = parts[0] || parts[1];
+			uri.searchParams.sort();
+
+			return {
+				url: uri,
+				type: type,
+				pageNumber: parseInt(uri.searchParams.get(this.options.query['page[number]'])),
+				pageSize: parseInt(uri.searchParams.get(this.options.query['page[size]']))
+			}
+		}
+
 		search(query)
 		{
 			let results = new Model();
 
 			for (let _type in this._model)
 			{
-				if (_type == '_paging' || (query.type && this.type({ type: query.type }) != _type)) continue
+				if (_type.indexOf('_') == 0 || (query.type && this.type({ type: query.type }) != _type)) continue
 
 				for (let _id in this._model[_type])
 				{
@@ -1056,7 +1128,7 @@ var ActionUI = (function (exports) {
 					let _data = this._model[_type][_id];
 					for (let _term in query)
 					{
-						_match = this.propertyValueExists(_data, _term, query[_term], 2);
+						_match = this.propertyValueExists(_data, _term, query[_term], this.options.searchDepth);
 					}
 
 					if (_match)
@@ -1087,6 +1159,8 @@ var ActionUI = (function (exports) {
 		async fetch(type, id, query = {})
 		{
 			type = this.type({ type: type });
+			query = query || {};
+			id = id || undefined;
 
 			if (typeof id == 'object')
 			{
@@ -1094,84 +1168,115 @@ var ActionUI = (function (exports) {
 				id = query.id;
 			}
 
-			Object.assign(query, { type: type, id: id });
-			let url = this.url(query);
-
-			if (this._model[type])
-			{
-				if (id != undefined && this._model[type][id] && !(this._model[type][id].hasOwnProperty('_store') && this._model[type][id]._store.url.indexOf(url) == -1))
-				{
-					return Promise.resolve(this._model[type][id])
-				}
-				else if (id == undefined && Object.keys(query).length == 0)
-				{
-					return Promise.resolve(this._model[type])
-				}
-				else if (id == undefined)
-				{
-					let search = this.search(query);
-					if (Object.keys(search).length)
-					{
-						return Promise.resolve(search)
-					}
-				}
-			}
+			let url = this.url(Object.assign({}, query, { type: type, id: id }));
 
 			if (this.options.verbose)
 				console.info('Store.fetch()', type, id, { type: type, id: id, query: query, store: this, url: url, options: this.options.fetch });
 
+			return this.fetchUrl(url)
+		}
+
+		async fetchUrl(url)
+		{
+			if (!url) return Promise.reject()
+			let type = null;
+
 			try
 			{
+				let parsedUrl = this.urlParse(url).url.toString();
+				let cached = this.urlCache(parsedUrl);
+
+				if (cached)
+				{
+					this.pageChange(cached.type, cached.pageNumber, cached.pageSize);
+					return Promise.resolve(cached.model)
+				}
+
 				const response = await fetch(url, this.options.fetch);
-				const json_1 = await response.json();
-				const json_2 = response.ok ? json_1 : Promise.reject(json_1);
-				return this.sync(json_2, url)
-			} catch (error)
+				const json = await response.json();
+				const json_2 = response.ok ? json : Promise.reject(json);
+
+				let model = this.sync(json_2, url);
+				cached = this.urlCache(parsedUrl, model, json_2);
+				type = cached.type;
+				return model
+			}
+			catch (error)
 			{
-				if (this.options.triggerChangesOnError)
+				if (type && this.options.triggerChangesOnError)
 					this.model(type).triggerChanges();
 				return await Promise.reject(error)
 			}
 		}
 
-		page(type, page = 1, size = 0)
+		urlCache(url, model = null, json = null)
 		{
-			size = parseInt(size) || this.options.per_page;
-			page = parseInt(page) || 1;
+			url = decodeURIComponent(url);
 
-			let cache = this._model._paging;
-
-			if ((type in cache) && (size in cache[type]) && (page in cache[type][size]))
+			if (!model && !json)
 			{
-				return Promise.resolve().then(() => cache[type][size][page])
-			}
-			else
-			{
-				if (!(type in cache)) cache[type] = {};
-				if (!(size in cache[type])) cache[type][size] = {};
-				if (!(page in cache[type][size])) cache[type][size][page] = new Model({
-					type: type,
-					number: page,
-					size: size,
-					count: 0,
-					links: {},
-					model: new Model()
-				});
+				return this._urlCache[url]
 			}
 
-			let url = this.url({ type: type, 'page[number]': page, 'page[size]': size });
+			let pageData = this.pageData(url);
+			let type = model[this.options.keys.type] || model._type || (pageData ? pageData.type : null);
 
-			if (this.options.verbose)
-				console.info('Store.page()', type, page, size, { type: type, page: page, size: size, store: this, url: url, options: options });
+			if (json)
+				for (let _key of this.options.keysExcludeFromCache) delete json[_key];
 
-			return fetch(url, this.options.fetch)
-				.then(response => response.json().then(json => response.ok ? json : Promise.reject(json)))
-				.then(json => cache[type][size][page].sync(
-					{
-						links: json.links || {},
-						count: Object.keys(this.data(json)).length,
-						model: this.sync(json, url)
-					}))
+			return this._urlCache[url] = {
+				url: url,
+				type: type,
+				model: model,
+				json: json,
+				pageNumber: (pageData ? pageData.pageNumber : false),
+				pageSize: (pageData ? pageData.pageSize : false)
+			}
+		}
+
+		pageData(url)
+		{
+			if (!url) return { type: null, pageNumber: false, pageSize: false }
+			let uri = this.urlParse(url);
+			let cached = this._urlCache[url];
+
+			return {
+				type: uri.type || (cached ? cached.type : null),
+				pageNumber: uri.pageNumber || (cached ? cached.pageNumber : false),
+				pageSize: uri.pageSize || (cached ? cached.pageSize : false),
+			}
+		}
+
+		paging(type)
+		{
+			return this.model(type)._paging || { current: false, pageNumber: false, pageSize: false }
+		}
+
+		async page(type, pageNumber = 1, pageSize = 0, query = {})
+		{
+			query = query || {};
+			pageSize = parseInt(pageSize) || this.options.per_page;
+			pageNumber = parseInt(pageNumber) || 1;
+
+			query.type = type;
+			query[this.options.query['page[number]']] = pageNumber;
+			query[this.options.query['page[size]']] = pageSize;
+
+			return await this.fetch(type, 0, query)
+		}
+
+		pageChange(type, pageNumber, pageSize)
+		{
+			if (!type || !this._model[type]._paging || !this._model[type]._paging[pageSize][pageNumber])
+				return false
+
+			this._model[type]._paging.pageNumber = pageNumber;
+			this._model[type]._paging.pageSize = pageSize;
+
+			delete this._model[type]._paging.current;
+			this._model[type]._paging.current = this._model[type]._paging[pageSize][pageNumber];
+
+			return this._model[type]._paging
 		}
 
 		post(type, data)
@@ -1280,8 +1385,12 @@ var ActionUI = (function (exports) {
 	            'keys': {
 	                'data' : 'data',
 	                'type' : 'type',
-	                'id'   : 'id'
-	            },
+					'id': 'id',
+					'links': 'links',
+					'meta': 'meta',
+					'included' : 'included'
+				},
+				'keysExcludeFromCache': ['data','included'],
 	            'query': {
 	                'page[number]' : 'page[number]',
 	                'page[size]'   : 'page[size]'
@@ -1289,25 +1398,39 @@ var ActionUI = (function (exports) {
 	            'per_page': 0,
 	            'fetch': {
 	                'headers': { 'Content-Type': 'application/vnd.api+json' }
-	            }
+	            },
+	            'searchDepth': 2
 	        };
 
 	        deepAssign(_options, options||{});
 	        super(_options);
 	    }
 
-	    sync(json, url)
+		sync(json, url, skipPaging = false)
 	    {
-	        if (json['included'])
+			if (json[this.options.keys.included])
 	        {
 	            let _keyData = this.options.keys.data;
-	            this.options.keys.data = 'included';
-	            super.sync(json, url);
+				this.options.keys.data = this.options.keys.included;
+	            super.sync(json, url, true);
 	            this.options.keys.data = _keyData;
-	        }
+			}
 
-	        return super.sync(json, url)
-	    }
+			return super.sync(json, url, skipPaging)
+		}
+
+		syncPaging(json, url)
+		{
+			let paging = super.syncPaging(json, url);
+
+			if (paging && paging.current)
+			{
+				paging.current[this.options.keys.links] = json[this.options.keys.links];
+				paging.current[this.options.keys.meta] = json[this.options.keys.meta];
+			}
+
+			return paging
+		}
 
 	    body(type, data)
 	    {
@@ -1336,8 +1459,7 @@ var ActionUI = (function (exports) {
 			if (jsonapi[this.options.keys.data].attributes[this.options.keys.id]) delete jsonapi[this.options.keys.data].attributes[this.options.keys.id];
 
 			return super.body(type, jsonapi)
-	    }
-
+		}
 	}
 
 	class StoreWordpress extends Store
