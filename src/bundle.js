@@ -794,7 +794,7 @@ var ActionUI = (function (exports) {
 
 	/**
 	 * Store
-	 * @version 202202078.1022
+	 * @version 20220210.1026
 	 * @description Remote data store
 	 * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
 	 */
@@ -837,7 +837,9 @@ var ActionUI = (function (exports) {
 					'post': this.actionHandler,
 					'patch': this.actionHandler,
 					'delete': this.actionHandler
-				}
+				},
+				eventBefore: new CustomEvent('store.before', { bubbles: true, cancelable: true, detail: { type: 'before', name: null, fetch: null, data: null, model: null, view: null } }),
+				eventAfter: new CustomEvent('store.after', { bubbles: true, detail: { type: 'after', name: null, fetch: null, data: null, model: null, view: null, success: null, response: null } })
 			};
 			deepAssign(this.options, options || {});
 
@@ -886,7 +888,7 @@ var ActionUI = (function (exports) {
 
 			if (!this._model[type])
 			{
-				this._model[type] = new Model({_type:type}, { model: this._model, property: type });
+				this._model[type] = new Model({_type:type, _loading:false}, { model: this._model, property: type });
 
 				this.actionCreate(type, 'get');
 				this.actionCreate(type, 'post');
@@ -1173,18 +1175,21 @@ var ActionUI = (function (exports) {
 			if (this.options.verbose)
 				console.info('Store.fetch()', type, id, { type: type, id: id, query: query, store: this, url: url, options: this.options.fetch });
 
-			return this.fetchUrl(url)
+			return this.fetchUrl(url, type, query)
 		}
 
-		async fetchUrl(url)
+		async fetchUrl(url, type, eventData = {})
 		{
 			if (!url) return Promise.reject()
-			let type = null;
 
 			try
 			{
+				eventData = eventData || {};
+				eventData.type = type;
+
 				let parsedUrl = this.urlParse(url).url.toString();
 				let cached = this.urlCache(parsedUrl);
+				type = eventData.type || (cached ? cached.type : null) || parsedUrl.type || null;
 
 				if (cached)
 				{
@@ -1192,18 +1197,20 @@ var ActionUI = (function (exports) {
 					return Promise.resolve(cached.model)
 				}
 
+				this.before(type, this.options.fetch, eventData);
 				const response = await fetch(url, this.options.fetch);
+				this.after(type, this.options.fetch, eventData, (response ? response.ok : false), response);
+
 				const json = await response.json();
 				const json_2 = response.ok ? json : Promise.reject(json);
 
 				let model = this.sync(json_2, url);
 				cached = this.urlCache(parsedUrl, model, json_2);
-				type = cached.type;
 				return model
 			}
 			catch (error)
 			{
-				if (type && this.options.triggerChangesOnError)
+				if (type && this.options.triggerChangesOnError && this._model[type] )
 					this.model(type).triggerChanges();
 				return await Promise.reject(error)
 			}
@@ -1342,6 +1349,92 @@ var ActionUI = (function (exports) {
 					if (this.options.triggerChangesOnError) this.model(type).triggerChanges();
 					return Promise.reject(error)
 				})
+		}
+
+		loading(type, isLoading)
+		{
+			if (arguments.length == 1)
+			{
+				return this.model(type)._loading
+			}
+
+			this.model(type)._loading = !!isLoading;
+		}
+
+		before(type, fetch, data)
+		{
+			let _name = this.options.baseUrl + '/' + type;
+			let view = null;
+			this.loading(type, true);
+
+			if (this.options.viewClass && this.options.viewMap.hasOwnProperty(type))
+			{
+				view = this.options.viewClass.cache(this.options.viewMap[type]);
+			}
+
+			if (this.options.verbose) console.info('Store.before()', _name, { store: this, type: type, fetch: fetch, data: data, view: view, model: this.model(type) });
+
+			if (view)
+			{
+				document
+					.querySelectorAll('[ui-view="' + view.name + '"]')
+					.forEach((_target) =>
+					{
+						this.options.viewClass.setCssClass(_target, this.options.viewClass.options.cssClass.loading);
+					});
+			}
+
+			let eventBefore = new CustomEvent(this.options.eventBefore.type, this.options.eventBefore);
+
+			Object.assign(eventBefore.detail, {
+				name: _name,
+				fetch: fetch,
+				store: this,
+				data: data,
+				model: this.model(type),
+				view: view
+			});
+
+			return document.dispatchEvent(eventBefore)
+		}
+
+		after(type, fetch, data, success, response)
+		{
+			let _name = this.options.baseUrl + '/' + type;
+			let view = null;
+			this.loading(type, false);
+
+			if (this.options.viewClass && this.options.viewMap.hasOwnProperty(type))
+			{
+				view = this.options.viewClass.cache(this.options.viewMap[type]);
+			}
+
+			if (this.options.verbose) console.info('Store.after()', _name, { store: this, type: type, fetch: fetch, data: data, view: view, model: this.model(type), success: success, response: response });
+
+			if (view)
+			{
+				document
+					.querySelectorAll('[ui-view="' + view.name + '"]')
+					.forEach((_target) =>
+					{
+						this.options.viewClass.setCssClass(_target, success ? this.options.viewClass.options.cssClass.success : this.options.viewClass.options.cssClass.fail);
+					});
+			}
+
+			let eventAfter = new CustomEvent(this.options.eventAfter.type, this.options.eventAfter);
+
+			Object.assign(eventAfter.detail, {
+				name: _name,
+				success: success,
+				fetch: fetch,
+				store: this,
+				data: data,
+				model: this.model(type),
+				view: view,
+				response: response
+			});
+
+			return document.dispatchEvent(eventAfter)
 		}
 
 		static cache(store)

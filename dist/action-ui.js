@@ -891,7 +891,7 @@ var ActionUI = function (exports) {
   }(Model);
   /**
    * Store
-   * @version 202202078.1022
+   * @version 20220210.1026
    * @description Remote data store
    * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
    */
@@ -939,7 +939,32 @@ var ActionUI = function (exports) {
           'post': this.actionHandler,
           'patch': this.actionHandler,
           'delete': this.actionHandler
-        }
+        },
+        eventBefore: new CustomEvent('store.before', {
+          bubbles: true,
+          cancelable: true,
+          detail: {
+            type: 'before',
+            name: null,
+            fetch: null,
+            data: null,
+            model: null,
+            view: null
+          }
+        }),
+        eventAfter: new CustomEvent('store.after', {
+          bubbles: true,
+          detail: {
+            type: 'after',
+            name: null,
+            fetch: null,
+            data: null,
+            model: null,
+            view: null,
+            success: null,
+            response: null
+          }
+        })
       };
       deepAssign(this.options, options || {});
       this._model = new Model();
@@ -983,7 +1008,8 @@ var ActionUI = function (exports) {
 
         if (!this._model[type]) {
           this._model[type] = new Model({
-            _type: type
+            _type: type,
+            _loading: false
           }, {
             model: this._model,
             property: type
@@ -1316,7 +1342,7 @@ var ActionUI = function (exports) {
                     url: url,
                     options: this.options.fetch
                   });
-                  return _context.abrupt("return", this.fetchUrl(url));
+                  return _context.abrupt("return", this.fetchUrl(url, type, query));
 
                 case 8:
                 case "end":
@@ -1335,69 +1361,81 @@ var ActionUI = function (exports) {
     }, {
       key: "fetchUrl",
       value: function () {
-        var _fetchUrl = _asyncToGenerator( /*#__PURE__*/regeneratorRuntime.mark(function _callee2(url) {
-          var type, parsedUrl, cached, response, json, json_2, model;
+        var _fetchUrl = _asyncToGenerator( /*#__PURE__*/regeneratorRuntime.mark(function _callee2(url, type) {
+          var eventData,
+              parsedUrl,
+              cached,
+              response,
+              json,
+              json_2,
+              model,
+              _args2 = arguments;
           return regeneratorRuntime.wrap(function _callee2$(_context2) {
             while (1) {
               switch (_context2.prev = _context2.next) {
                 case 0:
+                  eventData = _args2.length > 2 && _args2[2] !== undefined ? _args2[2] : {};
+
                   if (url) {
-                    _context2.next = 2;
+                    _context2.next = 3;
                     break;
                   }
 
                   return _context2.abrupt("return", Promise.reject());
 
-                case 2:
-                  type = null;
+                case 3:
                   _context2.prev = 3;
+                  eventData = eventData || {};
+                  eventData.type = type;
                   parsedUrl = this.urlParse(url).url.toString();
                   cached = this.urlCache(parsedUrl);
+                  type = eventData.type || (cached ? cached.type : null) || parsedUrl.type || null;
 
                   if (!cached) {
-                    _context2.next = 9;
+                    _context2.next = 12;
                     break;
                   }
 
                   this.pageChange(cached.type, cached.pageNumber, cached.pageSize);
                   return _context2.abrupt("return", Promise.resolve(cached.model));
 
-                case 9:
-                  _context2.next = 11;
+                case 12:
+                  this.before(type, this.options.fetch, eventData);
+                  _context2.next = 15;
                   return fetch(url, this.options.fetch);
 
-                case 11:
+                case 15:
                   response = _context2.sent;
-                  _context2.next = 14;
+                  this.after(type, this.options.fetch, eventData, response ? response.ok : false, response);
+                  _context2.next = 19;
                   return response.json();
 
-                case 14:
+                case 19:
                   json = _context2.sent;
                   json_2 = response.ok ? json : Promise.reject(json);
                   model = this.sync(json_2, url);
                   cached = this.urlCache(parsedUrl, model, json_2);
-                  type = cached.type;
                   return _context2.abrupt("return", model);
 
-                case 22:
-                  _context2.prev = 22;
+                case 26:
+                  _context2.prev = 26;
                   _context2.t0 = _context2["catch"](3);
-                  if (type && this.options.triggerChangesOnError) this.model(type).triggerChanges();
-                  _context2.next = 27;
+                  if (type && this.options.triggerChangesOnError && this._model[type]) this.model(type).triggerChanges();
+                  _context2.next = 31;
                   return Promise.reject(_context2.t0);
 
-                case 27:
+                case 31:
                   return _context2.abrupt("return", _context2.sent);
 
-                case 28:
+                case 32:
                 case "end":
                   return _context2.stop();
               }
             }
-          }, _callee2, this, [[3, 22]]);
+          }, _callee2, this, [[3, 26]]);
         }));
 
-        function fetchUrl(_x5) {
+        function fetchUrl(_x5, _x6) {
           return _fetchUrl.apply(this, arguments);
         }
 
@@ -1502,7 +1540,7 @@ var ActionUI = function (exports) {
           }, _callee3, this);
         }));
 
-        function page(_x6) {
+        function page(_x7) {
           return _page2.apply(this, arguments);
         }
 
@@ -1611,6 +1649,99 @@ var ActionUI = function (exports) {
           if (_this8.options.triggerChangesOnError) _this8.model(type).triggerChanges();
           return Promise.reject(error);
         });
+      }
+    }, {
+      key: "loading",
+      value: function loading(type, isLoading) {
+        if (arguments.length == 1) {
+          return this.model(type)._loading;
+        }
+
+        this.model(type)._loading = !!isLoading;
+      }
+    }, {
+      key: "before",
+      value: function before(type, fetch, data) {
+        var _this9 = this;
+
+        var _name = this.options.baseUrl + '/' + type;
+
+        var view = null;
+        this.loading(type, true);
+
+        if (this.options.viewClass && this.options.viewMap.hasOwnProperty(type)) {
+          view = this.options.viewClass.cache(this.options.viewMap[type]);
+        }
+
+        if (this.options.verbose) console.info('Store.before()', _name, {
+          store: this,
+          type: type,
+          fetch: fetch,
+          data: data,
+          view: view,
+          model: this.model(type)
+        });
+
+        if (view) {
+          document.querySelectorAll('[ui-view="' + view.name + '"]').forEach(function (_target) {
+            _this9.options.viewClass.setCssClass(_target, _this9.options.viewClass.options.cssClass.loading);
+          });
+        }
+
+        var eventBefore = new CustomEvent(this.options.eventBefore.type, this.options.eventBefore);
+        Object.assign(eventBefore.detail, {
+          name: _name,
+          fetch: fetch,
+          store: this,
+          data: data,
+          model: this.model(type),
+          view: view
+        });
+        return document.dispatchEvent(eventBefore);
+      }
+    }, {
+      key: "after",
+      value: function after(type, fetch, data, success, response) {
+        var _this10 = this;
+
+        var _name = this.options.baseUrl + '/' + type;
+
+        var view = null;
+        this.loading(type, false);
+
+        if (this.options.viewClass && this.options.viewMap.hasOwnProperty(type)) {
+          view = this.options.viewClass.cache(this.options.viewMap[type]);
+        }
+
+        if (this.options.verbose) console.info('Store.after()', _name, {
+          store: this,
+          type: type,
+          fetch: fetch,
+          data: data,
+          view: view,
+          model: this.model(type),
+          success: success,
+          response: response
+        });
+
+        if (view) {
+          document.querySelectorAll('[ui-view="' + view.name + '"]').forEach(function (_target) {
+            _this10.options.viewClass.setCssClass(_target, success ? _this10.options.viewClass.options.cssClass.success : _this10.options.viewClass.options.cssClass.fail);
+          });
+        }
+
+        var eventAfter = new CustomEvent(this.options.eventAfter.type, this.options.eventAfter);
+        Object.assign(eventAfter.detail, {
+          name: _name,
+          success: success,
+          fetch: fetch,
+          store: this,
+          data: data,
+          model: this.model(type),
+          view: view,
+          response: response
+        });
+        return document.dispatchEvent(eventAfter);
       }
     }], [{
       key: "cache",
@@ -1786,7 +1917,7 @@ var ActionUI = function (exports) {
 
   var View = /*#__PURE__*/function () {
     function View(name, html, model) {
-      var _this9 = this;
+      var _this11 = this;
 
       _classCallCheck(this, View);
 
@@ -1806,7 +1937,7 @@ var ActionUI = function (exports) {
       this._html = html;
       this._model = model;
       model.watch(function (changes) {
-        return _this9.update(changes);
+        return _this11.update(changes);
       });
 
       if (this.constructor.options.autoCache) {
@@ -1841,7 +1972,7 @@ var ActionUI = function (exports) {
     }, {
       key: "render",
       value: function render() {
-        var _this10 = this;
+        var _this12 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
           view: this
@@ -1851,18 +1982,18 @@ var ActionUI = function (exports) {
           view: this
         });
         document.querySelectorAll('[ui-view="' + this._name + '"]').forEach(function (_target) {
-          _target.innerHTML = _this10.html;
+          _target.innerHTML = _this12.html;
 
-          _target.dispatchEvent(_this10.constructor.options.eventRender);
+          _target.dispatchEvent(_this12.constructor.options.eventRender);
 
-          _this10.renderSubviews(_target);
+          _this12.renderSubviews(_target);
         });
         return Promise.resolve();
       }
     }, {
       key: "renderSubviews",
       value: function renderSubviews(parent) {
-        var _this11 = this;
+        var _this13 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.renderSubviews()', this.name, {
           view: this,
@@ -1871,7 +2002,7 @@ var ActionUI = function (exports) {
         parent.querySelectorAll('[ui-view]').forEach(function (_sub) {
           var viewName = _sub.getAttribute('ui-view');
 
-          var view = _this11.constructor.cache(viewName);
+          var view = _this13.constructor.cache(viewName);
 
           if (view) {
             view.render();
@@ -1967,7 +2098,7 @@ var ActionUI = function (exports) {
     var _super5 = _createSuper(ViewFile);
 
     function ViewFile(name, file, model) {
-      var _this12;
+      var _this14;
 
       _classCallCheck(this, ViewFile);
 
@@ -1980,9 +2111,9 @@ var ActionUI = function (exports) {
         file = name;
       }
 
-      _this12 = _super5.call(this, name, null, model);
-      _this12.file = file;
-      return _this12;
+      _this14 = _super5.call(this, name, null, model);
+      _this14.file = file;
+      return _this14;
     }
 
     _createClass(ViewFile, [{
@@ -1994,7 +2125,7 @@ var ActionUI = function (exports) {
     }, {
       key: "render",
       value: function render() {
-        var _this13 = this;
+        var _this15 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
           view: this
@@ -2003,7 +2134,7 @@ var ActionUI = function (exports) {
         var _promise = this._html == null ? this.fetch() : Promise.resolve();
 
         return _promise.then(function () {
-          return _get(_getPrototypeOf(ViewFile.prototype), "render", _this13).call(_this13);
+          return _get(_getPrototypeOf(ViewFile.prototype), "render", _this15).call(_this15);
         });
       }
     }, {
@@ -2019,7 +2150,7 @@ var ActionUI = function (exports) {
 
         return fetch;
       }(function () {
-        var _this14 = this;
+        var _this16 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.fetch()', this.name, {
           view: this
@@ -2032,27 +2163,27 @@ var ActionUI = function (exports) {
             throw new Error(response.statusText);
           }
         }).then(function (html) {
-          _this14._html = html;
+          _this16._html = html;
 
-          _this14.fetchAfter(true);
+          _this16.fetchAfter(true);
 
-          return _this14._html;
+          return _this16._html;
         }).catch(function (e) {
-          _this14.fetchAfter(false);
+          _this16.fetchAfter(false);
 
-          throw new Error('File not found: ' + _this14.fileName);
+          throw new Error('File not found: ' + _this16.fileName);
         });
       })
     }, {
       key: "fetchBefore",
       value: function fetchBefore() {
-        var _this15 = this;
+        var _this17 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.fetchBefore()', this.name, {
           view: this
         });
         document.querySelectorAll('[ui-view="' + this._name + '"]').forEach(function (target) {
-          _this15.constructor.setCssClass(target, _options$2.cssClass.loading);
+          _this17.constructor.setCssClass(target, _options$2.cssClass.loading);
         });
 
         if (this.constructor.options.eventFetch) {
@@ -2066,13 +2197,13 @@ var ActionUI = function (exports) {
     }, {
       key: "fetchAfter",
       value: function fetchAfter(success) {
-        var _this16 = this;
+        var _this18 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.fetchAfter()', this.name, {
           view: this
         });
         document.querySelectorAll('[ui-view="' + this._name + '"]').forEach(function (target) {
-          _this16.constructor.setCssClass(target, success ? _options$2.cssClass.success : _options$2.cssClass.fail);
+          _this18.constructor.setCssClass(target, success ? _options$2.cssClass.success : _options$2.cssClass.fail);
         });
 
         if (this.constructor.options.eventFetch) {
@@ -2188,7 +2319,7 @@ var ActionUI = function (exports) {
     _createClass(ViewHandlebars, [{
       key: "render",
       value: function render() {
-        var _this17 = this;
+        var _this19 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
           view: this
@@ -2201,18 +2332,18 @@ var ActionUI = function (exports) {
         }
 
         return _promise.then(function () {
-          return _get(_getPrototypeOf(ViewHandlebars.prototype), "render", _this17).call(_this17);
+          return _get(_getPrototypeOf(ViewHandlebars.prototype), "render", _this19).call(_this19);
         });
       }
     }, {
       key: "fetch",
       value: function fetch() {
-        var _this18 = this;
+        var _this20 = this;
 
         return _get(_getPrototypeOf(ViewHandlebars.prototype), "fetch", this).call(this).then(function (html) {
           if (!('templates' in Handlebars)) Handlebars.templates = [];
-          Handlebars.templates[_this18.file] = Handlebars.compile(html);
-          _this18.html = Handlebars.templates[_this18.file];
+          Handlebars.templates[_this20.file] = Handlebars.compile(html);
+          _this20.html = Handlebars.templates[_this20.file];
           return html;
         });
       } // #region Static methods
@@ -2293,7 +2424,7 @@ var ActionUI = function (exports) {
     }, {
       key: "navigate",
       value: function navigate(route) {
-        var _this19 = this;
+        var _this21 = this;
 
         var data = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
         var event = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : null;
@@ -2404,11 +2535,11 @@ var ActionUI = function (exports) {
           var viewContainer = document.querySelectorAll('[ui-view="' + this.view.name + '"]');
           this.handleLoading(viewContainer, true);
           result.then(function () {
-            return _this19.handleLoading(viewContainer, false);
+            return _this21.handleLoading(viewContainer, false);
           }).catch(function (e) {
-            _this19.handleLoading(viewContainer, false);
+            _this21.handleLoading(viewContainer, false);
 
-            _this19.handleError(controller, model, path, e);
+            _this21.handleError(controller, model, path, e);
 
             throw e;
           });
