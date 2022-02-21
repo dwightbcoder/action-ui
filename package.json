@@ -1,12 +1,12 @@
 {
   "name": "@dwightbcoder/action-ui",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Action UI is a Javascript framework to simplify connecting actions to user interface elements",
   "main": "dist/action-ui.min.js",
   "directories": {
     "example": "example"
   },
-  "scripts": {
+   "scripts": {
     "prepublishOnly": "npm run build",
     "rollup": "rollup src/index.js --format iife --name ActionUI --file src/bundle.js",
     "babel:dev": "NODE_ENV=dev babel src/bundle.js -d dist && mv dist/bundle.js dist/action-ui.js",
