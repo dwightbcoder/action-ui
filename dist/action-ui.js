@@ -891,7 +891,7 @@ var ActionUI = function (exports) {
   }(Model);
   /**
    * Store
-   * @version 20220210.1026
+   * @version 20220221.1215
    * @description Remote data store
    * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
    */
@@ -1413,26 +1413,36 @@ var ActionUI = function (exports) {
                 case 19:
                   json = _context2.sent;
                   json_2 = response.ok ? json : Promise.reject(json);
+                  _context2.prev = 21;
                   model = this.sync(json_2, url);
                   cached = this.urlCache(parsedUrl, model, json_2);
                   return _context2.abrupt("return", model);
 
-                case 26:
-                  _context2.prev = 26;
-                  _context2.t0 = _context2["catch"](3);
-                  if (type && this.options.triggerChangesOnError && this._model[type]) this.model(type).triggerChanges();
-                  _context2.next = 31;
-                  return Promise.reject(_context2.t0);
+                case 27:
+                  _context2.prev = 27;
+                  _context2.t0 = _context2["catch"](21);
+                  return _context2.abrupt("return", Promise.reject(json));
 
-                case 31:
-                  return _context2.abrupt("return", _context2.sent);
+                case 30:
+                  _context2.next = 38;
+                  break;
 
                 case 32:
+                  _context2.prev = 32;
+                  _context2.t1 = _context2["catch"](3);
+                  if (type && this.options.triggerChangesOnError && this._model[type]) this.model(type).triggerChanges();
+                  _context2.next = 37;
+                  return Promise.reject(_context2.t1);
+
+                case 37:
+                  return _context2.abrupt("return", _context2.sent);
+
+                case 38:
                 case "end":
                   return _context2.stop();
               }
             }
-          }, _callee2, this, [[3, 26]]);
+          }, _callee2, this, [[3, 32], [21, 27]]);
         }));
 
         function fetchUrl(_x5, _x6) {

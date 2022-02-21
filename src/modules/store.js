@@ -4,7 +4,7 @@ import { Action } from './action.js'
 
 /**
  * Store
- * @version 20220210.1026
+ * @version 20220221.1215
  * @description Remote data store
  * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
  */
@@ -414,9 +414,16 @@ class Store
 			const json = await response.json()
 			const json_2 = response.ok ? json : Promise.reject(json)
 
-			let model = this.sync(json_2, url)
-			cached = this.urlCache(parsedUrl, model, json_2)
-			return model
+			try
+			{
+				let model = this.sync(json_2, url)
+				cached = this.urlCache(parsedUrl, model, json_2)
+				return model
+			}
+			catch (error)
+			{
+				return Promise.reject(json)
+			}
 		}
 		catch (error)
 		{
