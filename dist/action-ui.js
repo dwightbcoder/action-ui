@@ -691,6 +691,7 @@ var ActionUI = function (exports) {
     }),
     eventAfter: new CustomEvent('action.after', {
       bubbles: true,
+      cancelable: true,
       detail: {
         type: 'after',
         name: null,

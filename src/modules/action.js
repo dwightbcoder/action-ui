@@ -309,7 +309,7 @@ let _options = {
 	autoCache: true,
 	cssClass: { 'loading': 'loading', 'success': 'success', 'fail': 'fail', 'canceled': 'canceled' },
 	eventBefore: new CustomEvent('action.before', { bubbles: true, cancelable: true, detail: { type: 'before', name: null, data: null, model: null } }),
-	eventAfter: new CustomEvent('action.after', { bubbles: true, detail: { type: 'after', name: null, data: null, success: null, model: null } })
+	eventAfter: new CustomEvent('action.after', { bubbles: true, cancelable: true, detail: { type: 'after', name: null, data: null, success: null, model: null } })
 }
 
 Action.init()
