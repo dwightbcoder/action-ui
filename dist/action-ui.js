@@ -892,7 +892,7 @@ var ActionUI = function (exports) {
   }(Model);
   /**
    * Store
-   * @version 20220221.1215
+   * @version 20220310
    * @description Remote data store
    * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
    */
@@ -926,6 +926,7 @@ var ActionUI = function (exports) {
         'searchDepth': 1,
         'triggerChangesOnError': true,
         // Allows views to update contents on failed requests, especially useful for Fetch All requests which return no results or 404
+        'triggerChangesOnEmpty': true,
         'verbose': false,
         'viewClass': null,
         'viewMap': {},
@@ -1100,7 +1101,7 @@ var ActionUI = function (exports) {
         var skipPaging = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
         var data = this.data(json);
 
-        if (!data) {
+        if (!data || Object.keys(data).length == 0) {
           throw new Error('Store: No data to sync');
         }
 
@@ -1368,7 +1369,6 @@ var ActionUI = function (exports) {
               cached,
               response,
               json,
-              json_2,
               model,
               _args2 = arguments;
           return regeneratorRuntime.wrap(function _callee2$(_context2) {
@@ -1413,37 +1413,46 @@ var ActionUI = function (exports) {
 
                 case 19:
                   json = _context2.sent;
-                  json_2 = response.ok ? json : Promise.reject(json);
-                  _context2.prev = 21;
-                  model = this.sync(json_2, url);
-                  cached = this.urlCache(parsedUrl, model, json_2);
-                  return _context2.abrupt("return", model);
 
-                case 27:
-                  _context2.prev = 27;
-                  _context2.t0 = _context2["catch"](21);
+                  if (response.ok) {
+                    _context2.next = 22;
+                    break;
+                  }
+
                   return _context2.abrupt("return", Promise.reject(json));
 
-                case 30:
-                  _context2.next = 38;
-                  break;
+                case 22:
+                  _context2.prev = 22;
+                  model = this.sync(json, url);
+                  this.urlCache(parsedUrl, model, json);
+                  return _context2.abrupt("return", model);
+
+                case 28:
+                  _context2.prev = 28;
+                  _context2.t0 = _context2["catch"](22);
+                  if (type && this.options.triggerChangesOnError && this._model[type]) this.model(type).triggerChanges();
+                  return _context2.abrupt("return", Promise.reject(json));
 
                 case 32:
-                  _context2.prev = 32;
+                  _context2.next = 40;
+                  break;
+
+                case 34:
+                  _context2.prev = 34;
                   _context2.t1 = _context2["catch"](3);
                   if (type && this.options.triggerChangesOnError && this._model[type]) this.model(type).triggerChanges();
-                  _context2.next = 37;
+                  _context2.next = 39;
                   return Promise.reject(_context2.t1);
 
-                case 37:
+                case 39:
                   return _context2.abrupt("return", _context2.sent);
 
-                case 38:
+                case 40:
                 case "end":
                   return _context2.stop();
               }
             }
-          }, _callee2, this, [[3, 32], [21, 27]]);
+          }, _callee2, this, [[3, 34], [22, 28]]);
         }));
 
         function fetchUrl(_x5, _x6) {
@@ -1664,11 +1673,17 @@ var ActionUI = function (exports) {
     }, {
       key: "loading",
       value: function loading(type, isLoading) {
-        if (arguments.length == 1) {
-          return this.model(type)._loading;
+        if (!this._model[type]) {
+          this.modelCreate(type);
         }
 
-        this.model(type)._loading = !!isLoading;
+        var model = this.model(type);
+
+        if (arguments.length == 1) {
+          return model._loading;
+        }
+
+        model._loading = !!isLoading;
       }
     }, {
       key: "before",

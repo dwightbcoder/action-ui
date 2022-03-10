@@ -794,7 +794,7 @@ var ActionUI = (function (exports) {
 
 	/**
 	 * Store
-	 * @version 20220221.1215
+	 * @version 20220310
 	 * @description Remote data store
 	 * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
 	 */
@@ -823,6 +823,7 @@ var ActionUI = (function (exports) {
 				},
 				'searchDepth': 1,
 				'triggerChangesOnError': true, // Allows views to update contents on failed requests, especially useful for Fetch All requests which return no results or 404
+				'triggerChangesOnEmpty': true,
 				'verbose': false,
 				'viewClass': null,
 				'viewMap': {},
@@ -960,7 +961,7 @@ var ActionUI = (function (exports) {
 		{
 			let data = this.data(json);
 
-			if (!data)
+			if (!data || Object.keys(data).length == 0)
 			{
 				throw new Error('Store: No data to sync')
 			}
@@ -1202,16 +1203,20 @@ var ActionUI = (function (exports) {
 				this.after(type, this.options.fetch, eventData, (response ? response.ok : false), response);
 
 				const json = await response.json();
-				const json_2 = response.ok ? json : Promise.reject(json);
-
+				
+				if(!response.ok)
+					return Promise.reject(json)
+				
 				try
 				{
-					let model = this.sync(json_2, url);
-					cached = this.urlCache(parsedUrl, model, json_2);
+					let model = this.sync(json, url);
+					this.urlCache(parsedUrl, model, json);
 					return model
 				}
 				catch (error)
 				{
+					if (type && this.options.triggerChangesOnError && this._model[type] )
+						this.model(type).triggerChanges();
 					return Promise.reject(json)
 				}
 			}
@@ -1360,12 +1365,19 @@ var ActionUI = (function (exports) {
 
 		loading(type, isLoading)
 		{
-			if (arguments.length == 1)
+			if (!this._model[type])
 			{
-				return this.model(type)._loading
+				this.modelCreate(type);
 			}
 
-			this.model(type)._loading = !!isLoading;
+			const model = this.model(type);
+
+			if (arguments.length == 1)
+			{
+				return model._loading
+			}
+
+			model._loading = !!isLoading;
 		}
 
 		before(type, fetch, data)
