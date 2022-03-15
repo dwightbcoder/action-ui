@@ -1415,44 +1415,45 @@ var ActionUI = function (exports) {
                   json = _context2.sent;
 
                   if (response.ok) {
-                    _context2.next = 22;
+                    _context2.next = 23;
                     break;
                   }
 
+                  if (type && this.options.triggerChangesOnError && this._model[type]) this.model(type).triggerChanges();
                   return _context2.abrupt("return", Promise.reject(json));
 
-                case 22:
-                  _context2.prev = 22;
+                case 23:
+                  _context2.prev = 23;
                   model = this.sync(json, url);
                   this.urlCache(parsedUrl, model, json);
                   return _context2.abrupt("return", model);
 
-                case 28:
-                  _context2.prev = 28;
-                  _context2.t0 = _context2["catch"](22);
+                case 29:
+                  _context2.prev = 29;
+                  _context2.t0 = _context2["catch"](23);
                   if (type && this.options.triggerChangesOnError && this._model[type]) this.model(type).triggerChanges();
                   return _context2.abrupt("return", Promise.reject(json));
 
-                case 32:
-                  _context2.next = 40;
+                case 33:
+                  _context2.next = 41;
                   break;
 
-                case 34:
-                  _context2.prev = 34;
+                case 35:
+                  _context2.prev = 35;
                   _context2.t1 = _context2["catch"](3);
                   if (type && this.options.triggerChangesOnError && this._model[type]) this.model(type).triggerChanges();
-                  _context2.next = 39;
+                  _context2.next = 40;
                   return Promise.reject(_context2.t1);
 
-                case 39:
+                case 40:
                   return _context2.abrupt("return", _context2.sent);
 
-                case 40:
+                case 41:
                 case "end":
                   return _context2.stop();
               }
             }
-          }, _callee2, this, [[3, 34], [22, 28]]);
+          }, _callee2, this, [[3, 35], [23, 29]]);
         }));
 
         function fetchUrl(_x5, _x6) {

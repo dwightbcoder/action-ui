@@ -415,7 +415,11 @@ class Store
 			const json = await response.json()
 			
 			if(!response.ok)
+			{
+				if (type && this.options.triggerChangesOnError && this._model[type] )
+					this.model(type).triggerChanges()
 				return Promise.reject(json)
+			}
 			
 			try
 			{
