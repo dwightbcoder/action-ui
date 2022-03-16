@@ -1814,7 +1814,8 @@ var ActionUI = function (exports) {
           'id': 'id',
           'links': 'links',
           'meta': 'meta',
-          'included': 'included'
+          'included': 'included',
+          'relationships': 'relationships'
         },
         'keysExcludeFromCache': ['data', 'included'],
         'query': {
@@ -1849,7 +1850,10 @@ var ActionUI = function (exports) {
 
         var model = _get(_getPrototypeOf(StoreJsonApi.prototype), "sync", this).call(this, json, url, skipPaging);
 
-        this.triggerChangesOnRelated(model.type, model.id);
+        try {
+          this.triggerChangesOnRelated(model.type, model.id);
+        } catch (e) {}
+
         return model;
       }
     }, {
@@ -1893,19 +1897,38 @@ var ActionUI = function (exports) {
 
         for (var _type in this._model) {
           for (var _id in this._model[_type]) {
-            if (this._model[_type][_id].relationships) {
-              for (var _name in this._model[_type][_id].relationships) {
-                if (this._model[_type][_id].relationships[_name].data && type == this._model[_type][_id].relationships[_name].data.type && id == this._model[_type][_id].relationships[_name].data.id) {
-                  ++count;
+            if (this._model[_type][_id][this.options.keys.relationships]) {
+              for (var _name in this._model[_type][_id][this.options.keys.relationships]) {
+                if (this._model[_type][_id][this.options.keys.relationships][_name] && this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data]) {
+                  if (Array.isArray(this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data])) {
+                    for (var i in this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data]) {
+                      if (this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data] && type == this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data][i][this.options.keys.type] && id == this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data][i][this.options.keys.id]) {
+                        ++count;
 
-                  this._model[_type][_id].triggerChanges({
-                    relationships: {
-                      value: {
-                        type: type,
-                        id: id
+                        this._model[_type][_id].triggerChanges({
+                          relationships: {
+                            value: {
+                              type: type,
+                              id: id
+                            }
+                          }
+                        });
                       }
                     }
-                  });
+                  } else {
+                    if (this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data] && type == this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data][this.options.keys.type] && id == this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data][this.options.keys.id]) {
+                      ++count;
+
+                      this._model[_type][_id].triggerChanges({
+                        relationships: {
+                          value: {
+                            type: type,
+                            id: id
+                          }
+                        }
+                      });
+                    }
+                  }
                 }
               }
             }
