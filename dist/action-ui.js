@@ -171,82 +171,38 @@ var ActionUI = function (exports) {
    */
 
   var Model = /*#__PURE__*/function () {
-    //static __instance = 0
     function Model() {
       var data = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
       var parent = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : null;
 
       _classCallCheck(this, Model);
 
-      //this._instance = ++Model.__instance
-      this._options = {
-        triggerDelay: 10
-      };
-      this._changes = {};
-      this._watchers = [];
-      this._timer = null;
-      this._parent = parent; //{ model: null, property: null }
-
-      deepAssign(this, data); // Pre-init required by IE11
-
-      this._privatize();
-
-      this.sync(data);
-
-      var proxySet = function proxySet(target, prop, value) {
-        var originalValue = target[prop];
-
-        if (target[prop] && target[prop] instanceof Model) {
-          target[prop].sync(value);
-        } else if (window.Reflect && window.Reflect.set) {
-          if (value instanceof Object && !Array.isArray(value) && !(value instanceof Model) && prop[0] != '_') {
-            // Convert child objects to models with this target as parent
-            value = new Model(value, {
-              model: target,
-              property: prop
-            });
-          }
-
-          Reflect.set(target, prop, value);
-        } else {
-          throw 'Missing Model dependency: Reflect.set()';
-        }
-
-        if (prop[0] == '_') {
-          return true; // Don't trigger changes for non-enumerable/private properties
-        }
-
-        target._change(prop, value, originalValue);
-
-        return true;
-      };
-
-      var proxyDelete = function proxyDelete(target, prop) {
-        if (prop in target) {
-          var originalValue = target[prop];
-          delete target[prop];
-
-          target._change(prop, undefined, originalValue);
-        }
-
-        return true;
-      };
-
       var proxy = null;
 
       try {
         proxy = new Proxy(this, {
-          set: proxySet,
-          deleteProperty: proxyDelete
+          set: this.constructor._proxySet,
+          deleteProperty: this.constructor._proxyDelete
         });
       } catch (e) {
         // IE11 Proxy polyfill does not support delete
         proxy = new Proxy(this, {
-          set: proxySet
+          set: this.constructor._proxySet
         });
-      }
+      } // Set private properties
 
-      deepAssign(this, data);
+
+      proxy._options = {
+        triggerDelay: 10
+      };
+      proxy._changes = {};
+      proxy._watchers = [];
+      proxy._timer = null;
+      proxy._parent = parent; //{ model: null, property: null }
+      // Sync initial data
+
+      proxy.sync(data);
+      proxy.clearChanges();
       return proxy;
     }
 
@@ -294,7 +250,8 @@ var ActionUI = function (exports) {
       key: "triggerChanges",
       value: function triggerChanges() {
         return this._trigger(true);
-      }
+      } // @deprecated
+
     }, {
       key: "_privatize",
       value: function _privatize() {
@@ -349,6 +306,50 @@ var ActionUI = function (exports) {
 
           this._parent.model._change(this._parent.property, this, thisCopy);
         }
+      }
+    }], [{
+      key: "_proxySet",
+      value: function _proxySet(target, prop, value) {
+        var originalValue = target[prop];
+
+        if (target[prop] && target[prop] instanceof Model) {
+          target[prop].sync(value);
+        } else if (window.Reflect && window.Reflect.set) {
+          if (value instanceof Object && !Array.isArray(value) && !(value instanceof Model) && prop[0] != '_') {
+            // Convert child objects to models with this target as parent
+            value = new Model(value, {
+              model: target,
+              property: prop
+            });
+          }
+
+          Reflect.set(target, prop, value);
+        } else {
+          throw 'Missing Model dependency: Reflect.set()';
+        }
+
+        if (prop[0] == '_') {
+          Object.defineProperty(target, prop, {
+            enumerable: false
+          });
+          return true; // Don't trigger changes for non-enumerable/private properties
+        }
+
+        target._change(prop, value, originalValue);
+
+        return true;
+      }
+    }, {
+      key: "_proxyDelete",
+      value: function _proxyDelete(target, prop) {
+        if (prop in target) {
+          var originalValue = target[prop];
+          delete target[prop];
+
+          target._change(prop, undefined, originalValue);
+        }
+
+        return true;
       }
     }]);
 

@@ -156,164 +156,119 @@ var ActionUI = (function (exports) {
 
 	class Model
 	{
-		//static __instance = 0
-
 		constructor(data = {}, parent = null)
 		{
-			//this._instance = ++Model.__instance
-			this._options = { triggerDelay: 10 };
-	        this._changes = {};
-	        this._watchers = [];
-			this._timer = null;
-			this._parent = parent; //{ model: null, property: null }
+			let proxy = null;
 
-			deepAssign(this, data); // Pre-init required by IE11
-			this._privatize();
-			this.sync(data);
-
-	        let proxySet = (target, prop, value) =>
+			try
 			{
-				let originalValue = target[prop];
+				proxy = new Proxy(this, { set: this.constructor._proxySet, deleteProperty: this.constructor._proxyDelete });
+			}
+			catch (e)
+			{
+				// IE11 Proxy polyfill does not support delete
+				proxy = new Proxy(this, { set: this.constructor._proxySet });
+			}
 
-				if (target[prop] && target[prop] instanceof Model)
+			// Set private properties
+			proxy._options = { triggerDelay: 10 };
+			proxy._changes = {};
+			proxy._watchers = [];
+			proxy._timer = null;
+			proxy._parent = parent; //{ model: null, property: null }
+
+			// Sync initial data
+			proxy.sync(data);
+			proxy.clearChanges();
+
+			return proxy
+		}
+
+		clear()
+		{
+			for (let i in this)
+			{
+				try
 				{
-					target[prop].sync(value);
+					delete this[i];
 				}
-				else if (window.Reflect && window.Reflect.set)
+				catch (e)
 				{
-					if (value instanceof Object && !Array.isArray(value) && !(value instanceof Model) && prop[0] != '_')
-					{
-						// Convert child objects to models with this target as parent
-						value = new Model(value, { model: target, property: prop });
-					}
-
-					Reflect.set(target, prop, value);
+					// Fallback for IE11
+					let originalValue = this[i];
+					this[i] = undefined;
+					this._change(i, undefined, originalValue);
 				}
-				else
-				{
-					throw 'Missing Model dependency: Reflect.set()' 
-				}
-				
-				if (prop[0] == '_')
-				{
-					return true // Don't trigger changes for non-enumerable/private properties
-				}
+			}
 
-				target._change(prop, value, originalValue);
-	            return true
-	        };
+			return this
+		}
 
-	        let proxyDelete = (target, prop) =>
-	        {
-	            if (prop in target)
-	            {
-	                let originalValue = target[prop];
-	                delete target[prop];
-	                target._change(prop, undefined, originalValue);
-	            }
-	            return true
-	        };
-
-	        let proxy = null;
-
-	        try
-	        {
-	            proxy = new Proxy(this, {set:proxySet, deleteProperty:proxyDelete});
-	        }
-	        catch(e)
-	        {
-	            // IE11 Proxy polyfill does not support delete
-	            proxy = new Proxy(this, {set:proxySet});
-	        }
-	        
-	        deepAssign(this, data);
-	        return proxy
-	    }
-
-	    clear()
-	    {
-	        for ( let i in this )
-	        {
-	            try
-	            {
-	                delete this[i];
-	            }
-	            catch(e)
-	            {
-	                // Fallback for IE11
-	                let originalValue = this[i];
-	                this[i] = undefined;
-	                this._change(i, undefined, originalValue);
-	            }
-	        }
-
-	        return this
-	    }
-
-	    // Sync data object to model
-	    sync(data)
-	    {
+		// Sync data object to model
+		sync(data)
+		{
 			data = deepAssign({}, data, true); // Copy and dereference
-	        deepAssign(this, data);
-	        return this
-	    }
+			deepAssign(this, data);
+			return this
+		}
 
-	    // Add watcher callback
-	    watch(callback)
-	    {
-	        this._watchers.push(callback);
-	        return this
-	    }
-
-	    clearChanges()
-	    {
-	        this._changes = {};
-	        return this
-	    }
-
-	    triggerChanges()
-	    {
-	        return this._trigger(true)
-	    }
-
-	    _privatize()
-	    {
-	        for ( let i in this )
-	        {
-	            if ( i[0] == "_" )
-	            {
-	                Object.defineProperty(this, i, {enumerable:false});
-	            }
-	        }
-	    }
-
-	    // Trigger all watcher callbacks
-	    _trigger(force = false)
+		// Add watcher callback
+		watch(callback)
 		{
-	        window.clearTimeout(this._timer);
-	        this._timer = null;
+			this._watchers.push(callback);
+			return this
+		}
 
-	        if (force || Object.keys(this._changes).length > 0)
+		clearChanges()
+		{
+			this._changes = {};
+			return this
+		}
+
+		triggerChanges()
+		{
+			return this._trigger(true)
+		}
+
+		// @deprecated
+		_privatize()
+		{
+			for (let i in this)
 			{
-	            let callbacks = this._watchers;
-	            for(let i in callbacks)
+				if (i[0] == "_")
 				{
-	                callbacks[i].call(this, this._changes);
-	            }
+					Object.defineProperty(this, i, { enumerable: false });
+				}
+			}
+		}
 
-	            // Clear change list
-	            this._changes = {};
-	        }
-	    }
-
-	    // Log property change
-	    _change(prop, value, originalValue)
+		// Trigger all watcher callbacks
+		_trigger(force = false)
 		{
-	        this._changes[prop] = {value:value, originalValue:originalValue};
+			window.clearTimeout(this._timer);
+			this._timer = null;
 
-	        if (! this._timer)
-	        {
-	            this._timer = window.setTimeout(() => this._trigger(), this._options.triggerDelay);
+			if (force || Object.keys(this._changes).length > 0)
+			{
+				let callbacks = this._watchers;
+				for (let i in callbacks)
+				{
+					callbacks[i].call(this, this._changes);
+				}
+
+				// Clear change list
+				this._changes = {};
+			}
+		}
+
+		// Log property change
+		_change(prop, value, originalValue)
+		{
+			this._changes[prop] = { value: value, originalValue: originalValue };
+
+			if (!this._timer)
+			{
+				this._timer = window.setTimeout(() => this._trigger(), this._options.triggerDelay);
 			}
 
 			if (this._parent != null)
@@ -324,7 +279,51 @@ var ActionUI = (function (exports) {
 
 				this._parent.model._change(this._parent.property, this, thisCopy);
 			}
-	    }
+		}
+
+		static _proxySet(target, prop, value)
+		{
+			let originalValue = target[prop];
+
+			if (target[prop] && target[prop] instanceof Model)
+			{
+				target[prop].sync(value);
+			}
+			else if (window.Reflect && window.Reflect.set)
+			{
+				if (value instanceof Object && !Array.isArray(value) && !(value instanceof Model) && prop[0] != '_')
+				{
+					// Convert child objects to models with this target as parent
+					value = new Model(value, { model: target, property: prop });
+				}
+
+				Reflect.set(target, prop, value);
+			}
+			else
+			{
+				throw 'Missing Model dependency: Reflect.set()'
+			}
+
+			if (prop[0] == '_')
+			{
+				Object.defineProperty(target, prop, { enumerable: false });
+				return true // Don't trigger changes for non-enumerable/private properties
+			}
+
+			target._change(prop, value, originalValue);
+			return true
+		}
+
+		static _proxyDelete(target, prop)
+		{
+			if (prop in target)
+			{
+				let originalValue = target[prop];
+				delete target[prop];
+				target._change(prop, undefined, originalValue);
+			}
+			return true
+		}
 	}
 
 	/**
