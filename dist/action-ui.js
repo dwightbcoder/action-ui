@@ -248,7 +248,8 @@ var ActionUI = function (exports) {
       }
     }, {
       key: "triggerChanges",
-      value: function triggerChanges() {
+      value: function triggerChanges(changes) {
+        if (changes) deepAssign(this._changes, changes);
         return this._trigger(true);
       } // @deprecated
 
@@ -276,6 +277,13 @@ var ActionUI = function (exports) {
 
           for (var i in callbacks) {
             callbacks[i].call(this, this._changes);
+          }
+
+          if (this._parent != null) {
+            this._parent.model.triggerChanges({
+              child: this,
+              changes: this._changes
+            });
           } // Clear change list
 
 
@@ -297,14 +305,6 @@ var ActionUI = function (exports) {
           this._timer = window.setTimeout(function () {
             return _this._trigger();
           }, this._options.triggerDelay);
-        }
-
-        if (this._parent != null) {
-          var thisCopy = {};
-          thisCopy = deepAssign({}, this, true);
-          thisCopy[prop] = originalValue;
-
-          this._parent.model._change(this._parent.property, this, thisCopy);
         }
       }
     }], [{
@@ -1847,7 +1847,10 @@ var ActionUI = function (exports) {
           this.options.keys.data = _keyData;
         }
 
-        return _get(_getPrototypeOf(StoreJsonApi.prototype), "sync", this).call(this, json, url, skipPaging);
+        var model = _get(_getPrototypeOf(StoreJsonApi.prototype), "sync", this).call(this, json, url, skipPaging);
+
+        this.triggerChangesOnRelated(model.type, model.id);
+        return model;
       }
     }, {
       key: "syncPaging",
@@ -1882,6 +1885,34 @@ var ActionUI = function (exports) {
         if (jsonapi[this.options.keys.data].attributes[this.options.keys.type]) delete jsonapi[this.options.keys.data].attributes[this.options.keys.type];
         if (jsonapi[this.options.keys.data].attributes[this.options.keys.id]) delete jsonapi[this.options.keys.data].attributes[this.options.keys.id];
         return _get(_getPrototypeOf(StoreJsonApi.prototype), "body", this).call(this, type, jsonapi);
+      }
+    }, {
+      key: "triggerChangesOnRelated",
+      value: function triggerChangesOnRelated(type, id) {
+        var count = 0;
+
+        for (var _type in this._model) {
+          for (var _id in this._model[_type]) {
+            if (this._model[_type][_id].relationships) {
+              for (var _name in this._model[_type][_id].relationships) {
+                if (this._model[_type][_id].relationships[_name].data && type == this._model[_type][_id].relationships[_name].data.type && id == this._model[_type][_id].relationships[_name].data.id) {
+                  ++count;
+
+                  this._model[_type][_id].triggerChanges({
+                    relationships: {
+                      value: {
+                        type: type,
+                        id: id
+                      }
+                    }
+                  });
+                }
+              }
+            }
+          }
+        }
+
+        return count;
       }
     }]);
 

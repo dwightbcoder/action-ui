@@ -225,8 +225,9 @@ var ActionUI = (function (exports) {
 			return this
 		}
 
-		triggerChanges()
+		triggerChanges(changes)
 		{
+			if (changes) deepAssign(this._changes, changes);
 			return this._trigger(true)
 		}
 
@@ -255,6 +256,11 @@ var ActionUI = (function (exports) {
 				{
 					callbacks[i].call(this, this._changes);
 				}
+				
+				if (this._parent != null)
+				{
+					this._parent.model.triggerChanges({ child: this, changes: this._changes});
+				}
 
 				// Clear change list
 				this._changes = {};
@@ -269,15 +275,6 @@ var ActionUI = (function (exports) {
 			if (!this._timer)
 			{
 				this._timer = window.setTimeout(() => this._trigger(), this._options.triggerDelay);
-			}
-
-			if (this._parent != null)
-			{
-				let thisCopy = {};
-				thisCopy = deepAssign({}, this, true);
-				thisCopy[prop] = originalValue;
-
-				this._parent.model._change(this._parent.property, this, thisCopy);
 			}
 		}
 
@@ -1531,7 +1528,11 @@ var ActionUI = (function (exports) {
 	            this.options.keys.data = _keyData;
 			}
 
-			return super.sync(json, url, skipPaging)
+			let model = super.sync(json, url, skipPaging);
+
+			this.triggerChangesOnRelated(model.type, model.id);
+
+			return model
 		}
 
 		syncPaging(json, url)
@@ -1574,6 +1575,34 @@ var ActionUI = (function (exports) {
 			if (jsonapi[this.options.keys.data].attributes[this.options.keys.id]) delete jsonapi[this.options.keys.data].attributes[this.options.keys.id];
 
 			return super.body(type, jsonapi)
+		}
+
+		triggerChangesOnRelated(type, id)
+		{
+			let count = 0;
+
+			for (const _type in this._model)
+			{
+				for (const _id in this._model[_type])
+				{
+					if (this._model[_type][_id].relationships)
+					{
+						for (const _name in this._model[_type][_id].relationships)
+						{
+							if (this._model[_type][_id].relationships[_name].data
+								&& type == this._model[_type][_id].relationships[_name].data.type
+								&& id == this._model[_type][_id].relationships[_name].data.id
+							)
+							{
+								++count;
+								this._model[_type][_id].triggerChanges({ relationships: { value: {type: type, id: id}}});
+							}
+						}
+					}
+				}
+			}
+
+			return count
 		}
 	}
 

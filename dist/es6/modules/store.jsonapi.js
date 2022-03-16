@@ -41,7 +41,11 @@ class StoreJsonApi extends Store
             this.options.keys.data = _keyData
 		}
 
-		return super.sync(json, url, skipPaging)
+		let model = super.sync(json, url, skipPaging)
+
+		this.triggerChangesOnRelated(model.type, model.id)
+
+		return model
 	}
 
 	syncPaging(json, url)
@@ -84,6 +88,34 @@ class StoreJsonApi extends Store
 		if (jsonapi[this.options.keys.data].attributes[this.options.keys.id]) delete jsonapi[this.options.keys.data].attributes[this.options.keys.id]
 
 		return super.body(type, jsonapi)
+	}
+
+	triggerChangesOnRelated(type, id)
+	{
+		let count = 0
+
+		for (const _type in this._model)
+		{
+			for (const _id in this._model[_type])
+			{
+				if (this._model[_type][_id].relationships)
+				{
+					for (const _name in this._model[_type][_id].relationships)
+					{
+						if (this._model[_type][_id].relationships[_name].data
+							&& type == this._model[_type][_id].relationships[_name].data.type
+							&& id == this._model[_type][_id].relationships[_name].data.id
+						)
+						{
+							++count
+							this._model[_type][_id].triggerChanges({ relationships: { value: {type: type, id: id}}})
+						}
+					}
+				}
+			}
+		}
+
+		return count
 	}
 }
 

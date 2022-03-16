@@ -76,8 +76,9 @@ class Model
 		return this
 	}
 
-	triggerChanges()
+	triggerChanges(changes)
 	{
+		if (changes) Util.deepAssign(this._changes, changes)
 		return this._trigger(true)
 	}
 
@@ -106,6 +107,11 @@ class Model
 			{
 				callbacks[i].call(this, this._changes)
 			}
+			
+			if (this._parent != null)
+			{
+				this._parent.model.triggerChanges({ child: this, changes: this._changes})
+			}
 
 			// Clear change list
 			this._changes = {}
@@ -120,15 +126,6 @@ class Model
 		if (!this._timer)
 		{
 			this._timer = window.setTimeout(() => this._trigger(), this._options.triggerDelay)
-		}
-
-		if (this._parent != null)
-		{
-			let thisCopy = {}
-			thisCopy = Util.deepAssign({}, this, true)
-			thisCopy[prop] = originalValue
-
-			this._parent.model._change(this._parent.property, this, thisCopy)
 		}
 	}
 
