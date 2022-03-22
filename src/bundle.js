@@ -1523,17 +1523,26 @@ var ActionUI = (function (exports) {
 	    {
 			if (json[this.options.keys.included])
 	        {
-	            let _keyData = this.options.keys.data;
-				this.options.keys.data = this.options.keys.included;
-	            super.sync(json, url, true);
-	            this.options.keys.data = _keyData;
+				let _json = { [this.options.keys.data]: json[this.options.keys.included]};
+	            this.sync(_json, url, true);
 			}
 
 			let model = super.sync(json, url, skipPaging);
 
 			try
 			{
-				this.triggerChangesOnRelated(model.type, model.id);
+				if (Array.isArray(model) || !(model[this.options.keys.type] && model[this.options.keys.id]))
+				{
+					for (const i in model)
+					{
+						if (model[i].hasOwnProperty(this.options.keys.type) && model[i].hasOwnProperty(this.options.keys.id))
+							this.triggerChangesOnRelated(model[i][this.options.keys.type], model[i][this.options.keys.id]);
+					}
+				}
+				else
+				{
+					this.triggerChangesOnRelated(model[this.options.keys.type], model[this.options.keys.id]);
+				}
 			}
 			catch (e) {}
 
@@ -1584,21 +1593,23 @@ var ActionUI = (function (exports) {
 
 		triggerChangesOnRelated(type, id)
 		{
+			if (!type || !id) return 0
+
 			let count = 0;
 
 			for (const _type in this._model)
 			{
 				for (const _id in this._model[_type])
 				{
-					if (this._model[_type][_id][this.options.keys.relationships])
+					if (this._model[_type][_id].hasOwnProperty(this.options.keys.relationships))
 					{
 						for (const _name in this._model[_type][_id][this.options.keys.relationships])
 						{
-							if (this._model[_type][_id][this.options.keys.relationships][_name] && this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data])
+							if (this._model[_type][_id][this.options.keys.relationships][_name].hasOwnProperty(this.options.keys.data))
 							{
 								if (Array.isArray(this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data]))
 								{
-									for (var i in this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data])
+									for (const i in this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data])
 									{
 										if (this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data]
 											&& type == this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data][i][this.options.keys.type]

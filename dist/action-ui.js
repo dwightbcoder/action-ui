@@ -1,5 +1,7 @@
 "use strict";
 
+function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
+
 function _get() { if (typeof Reflect !== "undefined" && Reflect.get) { _get = Reflect.get; } else { _get = function _get(target, property, receiver) { var base = _superPropBase(target, property); if (!base) return; var desc = Object.getOwnPropertyDescriptor(base, property); if (desc.get) { return desc.get.call(arguments.length < 3 ? target : receiver); } return desc.value; }; } return _get.apply(this, arguments); }
 
 function _superPropBase(object, property) { while (!Object.prototype.hasOwnProperty.call(object, property)) { object = _getPrototypeOf(object); if (object === null) break; } return object; }
@@ -1840,18 +1842,21 @@ var ActionUI = function (exports) {
         var skipPaging = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
 
         if (json[this.options.keys.included]) {
-          var _keyData = this.options.keys.data;
-          this.options.keys.data = this.options.keys.included;
+          var _json = _defineProperty({}, this.options.keys.data, json[this.options.keys.included]);
 
-          _get(_getPrototypeOf(StoreJsonApi.prototype), "sync", this).call(this, json, url, true);
-
-          this.options.keys.data = _keyData;
+          this.sync(_json, url, true);
         }
 
         var model = _get(_getPrototypeOf(StoreJsonApi.prototype), "sync", this).call(this, json, url, skipPaging);
 
         try {
-          this.triggerChangesOnRelated(model.type, model.id);
+          if (Array.isArray(model) || !(model[this.options.keys.type] && model[this.options.keys.id])) {
+            for (var i in model) {
+              if (model[i].hasOwnProperty(this.options.keys.type) && model[i].hasOwnProperty(this.options.keys.id)) this.triggerChangesOnRelated(model[i][this.options.keys.type], model[i][this.options.keys.id]);
+            }
+          } else {
+            this.triggerChangesOnRelated(model[this.options.keys.type], model[this.options.keys.id]);
+          }
         } catch (e) {}
 
         return model;
@@ -1893,13 +1898,14 @@ var ActionUI = function (exports) {
     }, {
       key: "triggerChangesOnRelated",
       value: function triggerChangesOnRelated(type, id) {
+        if (!type || !id) return 0;
         var count = 0;
 
         for (var _type in this._model) {
           for (var _id in this._model[_type]) {
-            if (this._model[_type][_id][this.options.keys.relationships]) {
+            if (this._model[_type][_id].hasOwnProperty(this.options.keys.relationships)) {
               for (var _name in this._model[_type][_id][this.options.keys.relationships]) {
-                if (this._model[_type][_id][this.options.keys.relationships][_name] && this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data]) {
+                if (this._model[_type][_id][this.options.keys.relationships][_name].hasOwnProperty(this.options.keys.data)) {
                   if (Array.isArray(this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data])) {
                     for (var i in this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data]) {
                       if (this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data] && type == this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data][i][this.options.keys.type] && id == this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data][i][this.options.keys.id]) {
