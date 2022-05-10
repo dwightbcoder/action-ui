@@ -790,7 +790,7 @@ var ActionUI = (function (exports) {
 
 	/**
 	 * Store
-	 * @version 20220310
+	 * @version 20220510
 	 * @description Remote data store
 	 * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
 	 */
@@ -1030,7 +1030,9 @@ var ActionUI = (function (exports) {
 			// Paging
 			if (pageData.type && pageData.pageSize && pageData.pageNumber)
 			{
+				let pageKey = this.pageKey(pageData.pageSize, pageData.query);
 				let data = this.data(json);
+
 				if (Array.isArray(data))
 				{
 					let _model = this.model(pageData.type);
@@ -1046,18 +1048,18 @@ var ActionUI = (function (exports) {
 					_json.url = [url];
 
 					if (!_model._paging)
-						_model._paging = new Model({ current: null, type: pageData.type, pageNumber: pageData.pageNumber, pageSize: pageData.pageSize }, { model: _model, property: '_paging'});
+						_model._paging = new Model({ current: null, type: pageData.type, pageNumber: pageData.pageNumber, pageSize: pageData.pageSize, pageKey: pageKey }, { model: _model, property: '_paging'});
 
-					if (!_model._paging[pageData.pageSize])
-						_model._paging[pageData.pageSize] = new Model({}, { model: _model._paging, property: pageData.pageSize});
+					if (!_model._paging[pageKey])
+						_model._paging[pageKey] = new Model({}, { model: _model._paging, property: pageKey});
 
-					if (!_model._paging[pageData.pageSize][pageData.pageNumber])
-						_model._paging[pageData.pageSize][pageData.pageNumber] = new Model({}, { model: _model._paging[pageData.pageSize], property: pageData.pageNumber});
+					if (!_model._paging[pageKey][pageData.pageNumber])
+						_model._paging[pageKey][pageData.pageNumber] = new Model({}, { model: _model._paging[pageKey], property: pageData.pageNumber});
 
-					_model._paging[pageData.pageSize][pageData.pageNumber].sync(_json);
+					_model._paging[pageKey][pageData.pageNumber].sync(_json);
 				}
 
-				return this.pageChange(pageData.type, pageData.pageNumber, pageData.pageSize)
+				return this.pageChange(pageData.type, pageData.pageNumber, pageData.pageSize, pageData.query)
 			}
 		}
 
@@ -1104,12 +1106,15 @@ var ActionUI = (function (exports) {
 			let parts = uri.pathname.replace(this.options.baseUrl, '').split('/');
 			let type = parts[0] || parts[1];
 			uri.searchParams.sort();
+			let query = {};
+			uri.searchParams.forEach((v, k) => query[k] = v);
 
 			return {
 				url: uri,
 				type: type,
 				pageNumber: parseInt(uri.searchParams.get(this.options.query['page[number]'])),
-				pageSize: parseInt(uri.searchParams.get(this.options.query['page[size]']))
+				pageSize: parseInt(uri.searchParams.get(this.options.query['page[size]'])),
+				query: query
 			}
 		}
 
@@ -1190,7 +1195,7 @@ var ActionUI = (function (exports) {
 
 				if (cached)
 				{
-					this.pageChange(cached.type, cached.pageNumber, cached.pageSize);
+					this.pageChange(cached.type, cached.pageNumber, cached.pageSize, cached.pageData.query);
 					return Promise.resolve(cached.model)
 				}
 
@@ -1248,6 +1253,7 @@ var ActionUI = (function (exports) {
 				type: type,
 				model: model,
 				json: json,
+				pageData: pageData,
 				pageNumber: (pageData ? pageData.pageNumber : false),
 				pageSize: (pageData ? pageData.pageSize : false)
 			}
@@ -1258,17 +1264,22 @@ var ActionUI = (function (exports) {
 			if (!url) return { type: null, pageNumber: false, pageSize: false }
 			let uri = this.urlParse(url);
 			let cached = this._urlCache[url];
+			let pageSize = uri.pageSize || (cached ? cached.pageSize : false);
+			let query = uri.query || (cached ? cached.query : {});
 
 			return {
 				type: uri.type || (cached ? cached.type : null),
 				pageNumber: uri.pageNumber || (cached ? cached.pageNumber : false),
-				pageSize: uri.pageSize || (cached ? cached.pageSize : false),
+				pageSize: pageSize,
+				pageKey: this.pageKey(pageSize, query),
+				query: query,
+				cached: cached ? true : false
 			}
 		}
 
 		paging(type)
 		{
-			return this.model(type)._paging || { current: false, pageNumber: false, pageSize: false }
+			return this.model(type)._paging || { current: false, pageNumber: false, pageSize: false, pageKey: false }
 		}
 
 		async page(type, pageNumber = 1, pageSize = 0, query = {})
@@ -1284,18 +1295,32 @@ var ActionUI = (function (exports) {
 			return await this.fetch(type, 0, query)
 		}
 
-		pageChange(type, pageNumber, pageSize)
+		pageChange(type, pageNumber, pageSize, query = {})
 		{
-			if (!type || !this._model[type]._paging || !this._model[type]._paging[pageSize][pageNumber])
+			let pageKey = this.pageKey(pageSize, query);
+
+			if (!type || !this._model[type]._paging || !this._model[type]._paging[pageKey][pageNumber])
 				return false
 
 			this._model[type]._paging.pageNumber = pageNumber;
 			this._model[type]._paging.pageSize = pageSize;
+			this._model[type]._paging.pageKey = pageKey;
 
 			delete this._model[type]._paging.current;
-			this._model[type]._paging.current = this._model[type]._paging[pageSize][pageNumber];
+			this._model[type]._paging.current = this._model[type]._paging[pageKey][pageNumber];
 
 			return this._model[type]._paging
+		}
+
+		pageKey(pageSize, query = {})
+		{
+			query[this.options.query['page[size]']] = pageSize;
+			delete query[this.options.query['page[number]']];
+
+			let searchParams = new URLSearchParams(query);
+			searchParams.sort();
+
+			return searchParams.toString()
 		}
 
 		post(type, data)

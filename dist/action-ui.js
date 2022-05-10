@@ -895,7 +895,7 @@ var ActionUI = function (exports) {
   }(Model);
   /**
    * Store
-   * @version 20220310
+   * @version 20220510
    * @description Remote data store
    * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
    */
@@ -1167,6 +1167,7 @@ var ActionUI = function (exports) {
         var pageData = this.pageData(url); // Paging
 
         if (pageData.type && pageData.pageSize && pageData.pageNumber) {
+          var pageKey = this.pageKey(pageData.pageSize, pageData.query);
           var data = this.data(json);
 
           if (Array.isArray(data)) {
@@ -1200,24 +1201,25 @@ var ActionUI = function (exports) {
               current: null,
               type: pageData.type,
               pageNumber: pageData.pageNumber,
-              pageSize: pageData.pageSize
+              pageSize: pageData.pageSize,
+              pageKey: pageKey
             }, {
               model: _model,
               property: '_paging'
             });
-            if (!_model._paging[pageData.pageSize]) _model._paging[pageData.pageSize] = new Model({}, {
+            if (!_model._paging[pageKey]) _model._paging[pageKey] = new Model({}, {
               model: _model._paging,
-              property: pageData.pageSize
+              property: pageKey
             });
-            if (!_model._paging[pageData.pageSize][pageData.pageNumber]) _model._paging[pageData.pageSize][pageData.pageNumber] = new Model({}, {
-              model: _model._paging[pageData.pageSize],
+            if (!_model._paging[pageKey][pageData.pageNumber]) _model._paging[pageKey][pageData.pageNumber] = new Model({}, {
+              model: _model._paging[pageKey],
               property: pageData.pageNumber
             });
 
-            _model._paging[pageData.pageSize][pageData.pageNumber].sync(_json);
+            _model._paging[pageKey][pageData.pageNumber].sync(_json);
           }
 
-          return this.pageChange(pageData.type, pageData.pageNumber, pageData.pageSize);
+          return this.pageChange(pageData.type, pageData.pageNumber, pageData.pageSize, pageData.query);
         }
       }
     }, {
@@ -1263,11 +1265,16 @@ var ActionUI = function (exports) {
         var parts = uri.pathname.replace(this.options.baseUrl, '').split('/');
         var type = parts[0] || parts[1];
         uri.searchParams.sort();
+        var query = {};
+        uri.searchParams.forEach(function (v, k) {
+          return query[k] = v;
+        });
         return {
           url: uri,
           type: type,
           pageNumber: parseInt(uri.searchParams.get(this.options.query['page[number]'])),
-          pageSize: parseInt(uri.searchParams.get(this.options.query['page[size]']))
+          pageSize: parseInt(uri.searchParams.get(this.options.query['page[size]'])),
+          query: query
         };
       }
     }, {
@@ -1400,7 +1407,7 @@ var ActionUI = function (exports) {
                     break;
                   }
 
-                  this.pageChange(cached.type, cached.pageNumber, cached.pageSize);
+                  this.pageChange(cached.type, cached.pageNumber, cached.pageSize, cached.pageData.query);
                   return _context2.abrupt("return", Promise.resolve(cached.model));
 
                 case 12:
@@ -1500,6 +1507,7 @@ var ActionUI = function (exports) {
           type: type,
           model: model,
           json: json,
+          pageData: pageData,
           pageNumber: pageData ? pageData.pageNumber : false,
           pageSize: pageData ? pageData.pageSize : false
         };
@@ -1514,10 +1522,15 @@ var ActionUI = function (exports) {
         };
         var uri = this.urlParse(url);
         var cached = this._urlCache[url];
+        var pageSize = uri.pageSize || (cached ? cached.pageSize : false);
+        var query = uri.query || (cached ? cached.query : {});
         return {
           type: uri.type || (cached ? cached.type : null),
           pageNumber: uri.pageNumber || (cached ? cached.pageNumber : false),
-          pageSize: uri.pageSize || (cached ? cached.pageSize : false)
+          pageSize: pageSize,
+          pageKey: this.pageKey(pageSize, query),
+          query: query,
+          cached: cached ? true : false
         };
       }
     }, {
@@ -1526,7 +1539,8 @@ var ActionUI = function (exports) {
         return this.model(type)._paging || {
           current: false,
           pageNumber: false,
-          pageSize: false
+          pageSize: false,
+          pageKey: false
         };
       }
     }, {
@@ -1573,12 +1587,25 @@ var ActionUI = function (exports) {
     }, {
       key: "pageChange",
       value: function pageChange(type, pageNumber, pageSize) {
-        if (!type || !this._model[type]._paging || !this._model[type]._paging[pageSize][pageNumber]) return false;
+        var query = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : {};
+        var pageKey = this.pageKey(pageSize, query);
+        if (!type || !this._model[type]._paging || !this._model[type]._paging[pageKey][pageNumber]) return false;
         this._model[type]._paging.pageNumber = pageNumber;
         this._model[type]._paging.pageSize = pageSize;
+        this._model[type]._paging.pageKey = pageKey;
         delete this._model[type]._paging.current;
-        this._model[type]._paging.current = this._model[type]._paging[pageSize][pageNumber];
+        this._model[type]._paging.current = this._model[type]._paging[pageKey][pageNumber];
         return this._model[type]._paging;
+      }
+    }, {
+      key: "pageKey",
+      value: function pageKey(pageSize) {
+        var query = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+        query[this.options.query['page[size]']] = pageSize;
+        delete query[this.options.query['page[number]']];
+        var searchParams = new URLSearchParams(query);
+        searchParams.sort();
+        return searchParams.toString();
       }
     }, {
       key: "post",
