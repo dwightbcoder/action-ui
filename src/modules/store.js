@@ -473,6 +473,26 @@ class Store
 		}
 	}
 
+	urlCacheClear(type, pagingOnly = false)
+	{
+		if (!type)
+		{
+			this._urlCache = {}
+			return
+		}
+
+		let url = Object.keys(this._urlCache)
+
+		for (var _url of url)
+		{
+			if (this._urlCache[_url].type == type)
+			{
+				if (!pagingOnly || (this._urlCache[_url].pageNumber && this._urlCache[_url].pageSize))
+					delete this._urlCache[_url]
+			}
+		}
+	}
+
 	pageData(url)
 	{
 		if (!url) return { type: null, pageNumber: false, pageSize: false }
@@ -494,6 +514,31 @@ class Store
 	paging(type)
 	{
 		return this.model(type)._paging || { current: false, pageNumber: false, pageSize: false, pageKey: false }
+	}
+
+	async pagingReset(type)
+	{
+		this.urlCacheClear(type, true)
+
+		let pageNumber = false
+		let pageSize = false
+		let pageQuery = false
+
+		if (this._model[type]._paging)
+		{
+			if (this._model[type]._paging.current)
+			{
+				pageNumber = this._model[type]._paging.current.pageNumber
+				pageSize = this._model[type]._paging.current.pageSize
+				pageQuery = this._model[type]._paging.current.query
+				if (this._model[type]._paging.current.data.length <= 1 && pageNumber > 1)
+					--pageNumber
+			}
+
+			delete this._model[type]._paging
+		}
+
+		return pageNumber && pageSize ? this.page(type, pageNumber, pageSize, pageQuery) : Promise.resolve()
 	}
 
 	async page(type, pageNumber = 1, pageSize = 0, query = {})
@@ -584,6 +629,8 @@ class Store
 
 	delete(type, id)
 	{
+		this.pagingReset(type)
+
 		let options = Object.create(this.options.fetch)
 		options.method = 'DELETE'
 
