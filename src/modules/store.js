@@ -4,7 +4,7 @@ import { Action } from './action.js'
 
 /**
  * Store
- * @version 20220510
+ * @version 20220708
  * @description Remote data store
  * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
  */
@@ -629,8 +629,6 @@ class Store
 
 	delete(type, id)
 	{
-		this.pagingReset(type)
-
 		let options = Object.create(this.options.fetch)
 		options.method = 'DELETE'
 
@@ -642,6 +640,7 @@ class Store
 		return fetch(url, options)
 			.then(response => response.json().then(json => response.ok ? json : Promise.reject(json)))
 			.then(json => { delete this._model[type][id]; return json })
+			.then(() => this.pagingReset(type).catch(_ => {}))
 			.catch(error =>
 			{
 				if (this.options.triggerChangesOnError) this.model(type).triggerChanges()
