@@ -895,7 +895,7 @@ var ActionUI = function (exports) {
   }(Model);
   /**
    * Store
-   * @version 20220510
+   * @version 20220708
    * @description Remote data store
    * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
    */
@@ -1513,6 +1513,26 @@ var ActionUI = function (exports) {
         };
       }
     }, {
+      key: "urlCacheClear",
+      value: function urlCacheClear(type) {
+        var pagingOnly = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : false;
+
+        if (!type) {
+          this._urlCache = {};
+          return;
+        }
+
+        var url = Object.keys(this._urlCache);
+
+        for (var _i3 = 0, _url2 = url; _i3 < _url2.length; _i3++) {
+          var _url = _url2[_i3];
+
+          if (this._urlCache[_url].type == type) {
+            if (!pagingOnly || this._urlCache[_url].pageNumber && this._urlCache[_url].pageSize) delete this._urlCache[_url];
+          }
+        }
+      }
+    }, {
       key: "pageData",
       value: function pageData(url) {
         if (!url) return {
@@ -1544,33 +1564,33 @@ var ActionUI = function (exports) {
         };
       }
     }, {
-      key: "page",
+      key: "pagingReset",
       value: function () {
-        var _page2 = _asyncToGenerator( /*#__PURE__*/regeneratorRuntime.mark(function _callee3(type) {
-          var pageNumber,
-              pageSize,
-              query,
-              _args3 = arguments;
+        var _pagingReset = _asyncToGenerator( /*#__PURE__*/regeneratorRuntime.mark(function _callee3(type) {
+          var pageNumber, pageSize, pageQuery;
           return regeneratorRuntime.wrap(function _callee3$(_context3) {
             while (1) {
               switch (_context3.prev = _context3.next) {
                 case 0:
-                  pageNumber = _args3.length > 1 && _args3[1] !== undefined ? _args3[1] : 1;
-                  pageSize = _args3.length > 2 && _args3[2] !== undefined ? _args3[2] : 0;
-                  query = _args3.length > 3 && _args3[3] !== undefined ? _args3[3] : {};
-                  query = query || {};
-                  pageSize = parseInt(pageSize) || this.options.per_page;
-                  pageNumber = parseInt(pageNumber) || 1;
-                  query.type = type;
-                  query[this.options.query['page[number]']] = pageNumber;
-                  query[this.options.query['page[size]']] = pageSize;
-                  _context3.next = 11;
-                  return this.fetch(type, 0, query);
+                  this.urlCacheClear(type, true);
+                  pageNumber = false;
+                  pageSize = false;
+                  pageQuery = false;
 
-                case 11:
-                  return _context3.abrupt("return", _context3.sent);
+                  if (this._model[type]._paging) {
+                    if (this._model[type]._paging.current) {
+                      pageNumber = this._model[type]._paging.current.pageNumber;
+                      pageSize = this._model[type]._paging.current.pageSize;
+                      pageQuery = this._model[type]._paging.current.query;
+                      if (this._model[type]._paging.current.data.length <= 1 && pageNumber > 1) --pageNumber;
+                    }
 
-                case 12:
+                    delete this._model[type]._paging;
+                  }
+
+                  return _context3.abrupt("return", pageNumber && pageSize ? this.page(type, pageNumber, pageSize, pageQuery) : Promise.resolve());
+
+                case 6:
                 case "end":
                   return _context3.stop();
               }
@@ -1578,7 +1598,48 @@ var ActionUI = function (exports) {
           }, _callee3, this);
         }));
 
-        function page(_x7) {
+        function pagingReset(_x7) {
+          return _pagingReset.apply(this, arguments);
+        }
+
+        return pagingReset;
+      }()
+    }, {
+      key: "page",
+      value: function () {
+        var _page2 = _asyncToGenerator( /*#__PURE__*/regeneratorRuntime.mark(function _callee4(type) {
+          var pageNumber,
+              pageSize,
+              query,
+              _args4 = arguments;
+          return regeneratorRuntime.wrap(function _callee4$(_context4) {
+            while (1) {
+              switch (_context4.prev = _context4.next) {
+                case 0:
+                  pageNumber = _args4.length > 1 && _args4[1] !== undefined ? _args4[1] : 1;
+                  pageSize = _args4.length > 2 && _args4[2] !== undefined ? _args4[2] : 0;
+                  query = _args4.length > 3 && _args4[3] !== undefined ? _args4[3] : {};
+                  query = query || {};
+                  pageSize = parseInt(pageSize) || this.options.per_page;
+                  pageNumber = parseInt(pageNumber) || 1;
+                  query.type = type;
+                  query[this.options.query['page[number]']] = pageNumber;
+                  query[this.options.query['page[size]']] = pageSize;
+                  _context4.next = 11;
+                  return this.fetch(type, 0, query);
+
+                case 11:
+                  return _context4.abrupt("return", _context4.sent);
+
+                case 12:
+                case "end":
+                  return _context4.stop();
+              }
+            }
+          }, _callee4, this);
+        }));
+
+        function page(_x8) {
           return _page2.apply(this, arguments);
         }
 
@@ -1696,6 +1757,8 @@ var ActionUI = function (exports) {
         }).then(function (json) {
           delete _this8._model[type][id];
           return json;
+        }).then(function () {
+          return _this8.pagingReset(type).catch(function (_) {});
         }).catch(function (error) {
           if (_this8.options.triggerChangesOnError) _this8.model(type).triggerChanges();
           return Promise.reject(error);

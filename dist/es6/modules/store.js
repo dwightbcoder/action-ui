@@ -4,7 +4,7 @@ import { Action } from './action.js'
 
 /**
  * Store
- * @version 20220510
+ * @version 20220708
  * @description Remote data store
  * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
  */
@@ -473,6 +473,26 @@ class Store
 		}
 	}
 
+	urlCacheClear(type, pagingOnly = false)
+	{
+		if (!type)
+		{
+			this._urlCache = {}
+			return
+		}
+
+		let url = Object.keys(this._urlCache)
+
+		for (var _url of url)
+		{
+			if (this._urlCache[_url].type == type)
+			{
+				if (!pagingOnly || (this._urlCache[_url].pageNumber && this._urlCache[_url].pageSize))
+					delete this._urlCache[_url]
+			}
+		}
+	}
+
 	pageData(url)
 	{
 		if (!url) return { type: null, pageNumber: false, pageSize: false }
@@ -494,6 +514,31 @@ class Store
 	paging(type)
 	{
 		return this.model(type)._paging || { current: false, pageNumber: false, pageSize: false, pageKey: false }
+	}
+
+	async pagingReset(type)
+	{
+		this.urlCacheClear(type, true)
+
+		let pageNumber = false
+		let pageSize = false
+		let pageQuery = false
+
+		if (this._model[type]._paging)
+		{
+			if (this._model[type]._paging.current)
+			{
+				pageNumber = this._model[type]._paging.current.pageNumber
+				pageSize = this._model[type]._paging.current.pageSize
+				pageQuery = this._model[type]._paging.current.query
+				if (this._model[type]._paging.current.data.length <= 1 && pageNumber > 1)
+					--pageNumber
+			}
+
+			delete this._model[type]._paging
+		}
+
+		return pageNumber && pageSize ? this.page(type, pageNumber, pageSize, pageQuery) : Promise.resolve()
 	}
 
 	async page(type, pageNumber = 1, pageSize = 0, query = {})
@@ -595,6 +640,7 @@ class Store
 		return fetch(url, options)
 			.then(response => response.json().then(json => response.ok ? json : Promise.reject(json)))
 			.then(json => { delete this._model[type][id]; return json })
+			.then(() => this.pagingReset(type).catch(_ => {}))
 			.catch(error =>
 			{
 				if (this.options.triggerChangesOnError) this.model(type).triggerChanges()
