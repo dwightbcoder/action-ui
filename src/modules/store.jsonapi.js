@@ -30,6 +30,7 @@ class StoreJsonApi extends Store
 
         Util.deepAssign(_options, options||{})
         super(_options)
+		this._mapRelationships = {}
     }
 
 	sync(json, url, skipPaging = false)
@@ -41,6 +42,7 @@ class StoreJsonApi extends Store
 		}
 
 		let model = super.sync(json, url, skipPaging)
+		this.mapRelationships(model)
 
 		try
 		{
@@ -75,6 +77,76 @@ class StoreJsonApi extends Store
 		return paging
 	}
 
+	mapRelationships(model)
+	{
+		try
+		{
+			if (Array.isArray(model) || !(model[this.options.keys.type] && model[this.options.keys.id]))
+			{
+				for (const i in model)
+				{
+					this.mapRelationships(model[i])
+				}
+			}
+			else if (model[this.options.keys.relationships])
+			{
+				const type = model[this.options.keys.type]
+				const id = model[this.options.keys.id]
+
+				for (const i in model[this.options.keys.relationships])
+				{
+					if (model[this.options.keys.relationships][i][this.options.keys.data])
+					{
+						if (Array.isArray(model[this.options.keys.relationships][i][this.options.keys.data]))
+						{
+							for (const ii in model[this.options.keys.relationships][i][this.options.keys.data])
+							{
+								const relationType = model[this.options.keys.relationships][i][this.options.keys.data][ii][this.options.keys.type]
+								const relationId = model[this.options.keys.relationships][i][this.options.keys.data][ii][this.options.keys.id]
+								this.mapRelationship(type, id, relationType, relationId)
+							}
+						}
+						else
+						{
+							const relationType = model[this.options.keys.relationships][i][this.options.keys.data][this.options.keys.type]
+							const relationId = model[this.options.keys.relationships][i][this.options.keys.data][this.options.keys.id]
+							this.mapRelationship(type, id, relationType, relationId)
+						}
+					}
+				}
+			}
+		}
+		catch (e) { console.error('MAP RELATIONSHIPS', e) }
+	}
+
+	mapRelationship(type, id, relationType, relationId)
+	{
+		if (!this._mapRelationships[type])
+			this._mapRelationships[type] = {}
+
+		if (!this._mapRelationships[type][id])
+			this._mapRelationships[type][id] = {}
+
+		if (!this._mapRelationships[type][id][relationType])
+			this._mapRelationships[type][id][relationType] = []
+
+		if (this._mapRelationships[type][id][relationType].indexOf(relationId) == -1)
+			this._mapRelationships[type][id][relationType].push(relationId)
+
+		// Reverse map
+		if (!this._mapRelationships[relationType])
+			this._mapRelationships[relationType] = {}
+
+		if (!this._mapRelationships[relationType][relationId])
+			this._mapRelationships[relationType][relationId] = {}
+
+		if (!this._mapRelationships[relationType][relationId][type])
+			this._mapRelationships[relationType][relationId][type] = []
+
+		if (this._mapRelationships[relationType][relationId][type].indexOf(id) == -1)
+			this._mapRelationships[relationType][relationId][type].push(id)
+	}
+
     body(type, data)
     {
         let id = data.id ? data.id : this.id(data)
@@ -107,47 +179,16 @@ class StoreJsonApi extends Store
 	triggerChangesOnRelated(type, id)
 	{
 		if (!type || !id) return 0
+		if (!this._mapRelationships[type] || !this._mapRelationships[type][id]) return 0
 
 		let count = 0
 
-		for (const _type in this._model)
+		for (const relationType in this._mapRelationships[type][id])
 		{
-			for (const _id in this._model[_type])
+			for (const relationId of this._mapRelationships[type][id][relationType])
 			{
-				if (this._model[_type][_id].hasOwnProperty(this.options.keys.relationships))
-				{
-					for (const _name in this._model[_type][_id][this.options.keys.relationships])
-					{
-						if (this._model[_type][_id][this.options.keys.relationships][_name].hasOwnProperty(this.options.keys.data))
-						{
-							if (Array.isArray(this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data]))
-							{
-								for (const i in this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data])
-								{
-									if (this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data]
-										&& type == this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data][i][this.options.keys.type]
-										&& id == this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data][i][this.options.keys.id]
-									)
-									{
-										++count
-										this._model[_type][_id].triggerChanges({ relationships: { value: { type: type, id: id } } })
-									}
-								}
-							}
-							else
-							{
-								if (this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data]
-									&& type == this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data][this.options.keys.type]
-									&& id == this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data][this.options.keys.id]
-								)
-								{
-									++count
-									this._model[_type][_id].triggerChanges({ relationships: { value: { type: type, id: id } } })
-								}
-							}
-						}
-					}
-				}
+				++count
+				this._model[relationType][relationId].triggerChanges({ relationships: { value: { type: type, id: id } } })
 			}
 		}
 

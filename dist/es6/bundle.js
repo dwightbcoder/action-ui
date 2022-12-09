@@ -483,7 +483,7 @@ var ActionUI = (function (exports) {
 			{
 				let target = firstMatchingParentElement(e.target, '[ui-action]');
 
-				if (target && target.tagName != 'FORM')
+				if (target && target.tagName != 'FORM' && !target.disabled && !e.target.disabled)
 				{
 					if (!(target.tagName == 'INPUT' && (target.type == 'checkbox' || target.type == 'radio')))
 						e.preventDefault();
@@ -514,7 +514,7 @@ var ActionUI = (function (exports) {
 			// Form submission
 			document.addEventListener('submit', e =>
 			{
-				if (e.target.matches('form[ui-action]'))
+				if (e.target.matches('form[ui-action]') && !e.target.disabled)
 				{
 					e.preventDefault();
 					var actionName = e.target.getAttribute('ui-action');
@@ -1588,6 +1588,7 @@ var ActionUI = (function (exports) {
 
 	        deepAssign(_options, options||{});
 	        super(_options);
+			this._mapRelationships = {};
 	    }
 
 		sync(json, url, skipPaging = false)
@@ -1599,6 +1600,7 @@ var ActionUI = (function (exports) {
 			}
 
 			let model = super.sync(json, url, skipPaging);
+			this.mapRelationships(model);
 
 			try
 			{
@@ -1633,6 +1635,76 @@ var ActionUI = (function (exports) {
 			return paging
 		}
 
+		mapRelationships(model)
+		{
+			try
+			{
+				if (Array.isArray(model) || !(model[this.options.keys.type] && model[this.options.keys.id]))
+				{
+					for (const i in model)
+					{
+						this.mapRelationships(model[i]);
+					}
+				}
+				else if (model[this.options.keys.relationships])
+				{
+					const type = model[this.options.keys.type];
+					const id = model[this.options.keys.id];
+
+					for (const i in model[this.options.keys.relationships])
+					{
+						if (model[this.options.keys.relationships][i][this.options.keys.data])
+						{
+							if (Array.isArray(model[this.options.keys.relationships][i][this.options.keys.data]))
+							{
+								for (const ii in model[this.options.keys.relationships][i][this.options.keys.data])
+								{
+									const relationType = model[this.options.keys.relationships][i][this.options.keys.data][ii][this.options.keys.type];
+									const relationId = model[this.options.keys.relationships][i][this.options.keys.data][ii][this.options.keys.id];
+									this.mapRelationship(type, id, relationType, relationId);
+								}
+							}
+							else
+							{
+								const relationType = model[this.options.keys.relationships][i][this.options.keys.data][this.options.keys.type];
+								const relationId = model[this.options.keys.relationships][i][this.options.keys.data][this.options.keys.id];
+								this.mapRelationship(type, id, relationType, relationId);
+							}
+						}
+					}
+				}
+			}
+			catch (e) { console.error('MAP RELATIONSHIPS', e); }
+		}
+
+		mapRelationship(type, id, relationType, relationId)
+		{
+			if (!this._mapRelationships[type])
+				this._mapRelationships[type] = {};
+
+			if (!this._mapRelationships[type][id])
+				this._mapRelationships[type][id] = {};
+
+			if (!this._mapRelationships[type][id][relationType])
+				this._mapRelationships[type][id][relationType] = [];
+
+			if (this._mapRelationships[type][id][relationType].indexOf(relationId) == -1)
+				this._mapRelationships[type][id][relationType].push(relationId);
+
+			// Reverse map
+			if (!this._mapRelationships[relationType])
+				this._mapRelationships[relationType] = {};
+
+			if (!this._mapRelationships[relationType][relationId])
+				this._mapRelationships[relationType][relationId] = {};
+
+			if (!this._mapRelationships[relationType][relationId][type])
+				this._mapRelationships[relationType][relationId][type] = [];
+
+			if (this._mapRelationships[relationType][relationId][type].indexOf(id) == -1)
+				this._mapRelationships[relationType][relationId][type].push(id);
+		}
+
 	    body(type, data)
 	    {
 	        let id = data.id ? data.id : this.id(data);
@@ -1665,47 +1737,16 @@ var ActionUI = (function (exports) {
 		triggerChangesOnRelated(type, id)
 		{
 			if (!type || !id) return 0
+			if (!this._mapRelationships[type] || !this._mapRelationships[type][id]) return 0
 
 			let count = 0;
 
-			for (const _type in this._model)
+			for (const relationType in this._mapRelationships[type][id])
 			{
-				for (const _id in this._model[_type])
+				for (const relationId of this._mapRelationships[type][id][relationType])
 				{
-					if (this._model[_type][_id].hasOwnProperty(this.options.keys.relationships))
-					{
-						for (const _name in this._model[_type][_id][this.options.keys.relationships])
-						{
-							if (this._model[_type][_id][this.options.keys.relationships][_name].hasOwnProperty(this.options.keys.data))
-							{
-								if (Array.isArray(this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data]))
-								{
-									for (const i in this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data])
-									{
-										if (this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data]
-											&& type == this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data][i][this.options.keys.type]
-											&& id == this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data][i][this.options.keys.id]
-										)
-										{
-											++count;
-											this._model[_type][_id].triggerChanges({ relationships: { value: { type: type, id: id } } });
-										}
-									}
-								}
-								else
-								{
-									if (this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data]
-										&& type == this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data][this.options.keys.type]
-										&& id == this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data][this.options.keys.id]
-									)
-									{
-										++count;
-										this._model[_type][_id].triggerChanges({ relationships: { value: { type: type, id: id } } });
-									}
-								}
-							}
-						}
-					}
+					++count;
+					this._model[relationType][relationId].triggerChanges({ relationships: { value: { type: type, id: id } } });
 				}
 			}
 
@@ -1809,7 +1850,10 @@ var ActionUI = (function (exports) {
 	    {
 			if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, { view: this });
 
-			Object.assign(this.constructor.options.eventRender.detail, {
+			let eventRender = new CustomEvent(this.constructor.options.eventRender.type, this.constructor.options.eventRender);
+
+			Object.assign(eventRender.detail,
+	        {
 				name: this.model.view,
 				view: this
 			});
@@ -1818,9 +1862,12 @@ var ActionUI = (function (exports) {
 	            .querySelectorAll('[ui-view="'+this._name+'"]')
 	            .forEach((_target) =>
 	            {
-					_target.innerHTML = this.html;
-					_target.dispatchEvent(this.constructor.options.eventRender);
-	                this.renderSubviews(_target);
+					let canceled = !_target.dispatchEvent(eventRender);
+					if (!canceled)
+					{
+						_target.innerHTML = eventRender.detail.view.html;
+	                    this.renderSubviews(_target);
+	                }
 	            });
 	        
 	        return Promise.resolve()
@@ -1891,7 +1938,7 @@ var ActionUI = (function (exports) {
 	let _options$1 = {
 	    verbose: false,
 	    autoCache: true, // Automatically cache views when created
-	    eventRender: new CustomEvent('view.render', { bubbles: true, detail: { type: 'render', name: null, view: null } })
+	    eventRender: new CustomEvent('view.render', { bubbles: true, cancelable: true, detail: { type: 'render', name: null, view: null } })
 	};
 
 	/**
@@ -2043,7 +2090,7 @@ var ActionUI = (function (exports) {
 		extension: 'html',
 		cssClass: { 'loading': 'loading', 'success': 'success', 'fail': 'fail' },
 		eventFetch: new CustomEvent('view.fetch', { bubbles: true, detail: { type: 'fetch', view: null, success: null } }),
-		eventRender: new CustomEvent('view.render', { bubbles: true, detail: { type: 'render', view: null } })
+		eventRender: new CustomEvent('view.render', { bubbles: true, cancelable: true, detail: { type: 'render', view: null } })
 	};
 	ViewFile.options = View.options;
 

@@ -161,7 +161,7 @@ class Action
 		{
 			let target = Util.firstMatchingParentElement(e.target, '[ui-action]')
 
-			if (target && target.tagName != 'FORM')
+			if (target && target.tagName != 'FORM' && !target.disabled && !e.target.disabled)
 			{
 				if (!(target.tagName == 'INPUT' && (target.type == 'checkbox' || target.type == 'radio')))
 					e.preventDefault()
@@ -192,7 +192,7 @@ class Action
 		// Form submission
 		document.addEventListener('submit', e =>
 		{
-			if (e.target.matches('form[ui-action]'))
+			if (e.target.matches('form[ui-action]') && !e.target.disabled)
 			{
 				e.preventDefault()
 				var actionName = e.target.getAttribute('ui-action')

@@ -533,7 +533,7 @@ var ActionUI = function (exports) {
         document.addEventListener('click', function (e) {
           var target = firstMatchingParentElement(e.target, '[ui-action]');
 
-          if (target && target.tagName != 'FORM') {
+          if (target && target.tagName != 'FORM' && !target.disabled && !e.target.disabled) {
             if (!(target.tagName == 'INPUT' && (target.type == 'checkbox' || target.type == 'radio'))) e.preventDefault();
             var actionName = target.getAttribute('ui-action'); // Don't run the action if it's already running
 
@@ -553,7 +553,7 @@ var ActionUI = function (exports) {
         }); // Form submission
 
         document.addEventListener('submit', function (e) {
-          if (e.target.matches('form[ui-action]')) {
+          if (e.target.matches('form[ui-action]') && !e.target.disabled) {
             e.preventDefault();
             var actionName = e.target.getAttribute('ui-action'); // Don't run the action if it's already running
 
@@ -1897,6 +1897,8 @@ var ActionUI = function (exports) {
     var _super3 = _createSuper(StoreJsonApi);
 
     function StoreJsonApi(options) {
+      var _this11;
+
       _classCallCheck(this, StoreJsonApi);
 
       var _options = {
@@ -1923,7 +1925,9 @@ var ActionUI = function (exports) {
         'searchDepth': 2
       };
       deepAssign(_options, options || {});
-      return _super3.call(this, _options);
+      _this11 = _super3.call(this, _options);
+      _this11._mapRelationships = {};
+      return _this11;
     }
 
     _createClass(StoreJsonApi, [{
@@ -1938,6 +1942,8 @@ var ActionUI = function (exports) {
         }
 
         var model = _get(_getPrototypeOf(StoreJsonApi.prototype), "sync", this).call(this, json, url, skipPaging);
+
+        this.mapRelationships(model);
 
         try {
           if (Array.isArray(model) || !(model[this.options.keys.type] && model[this.options.keys.id])) {
@@ -1962,6 +1968,51 @@ var ActionUI = function (exports) {
         }
 
         return paging;
+      }
+    }, {
+      key: "mapRelationships",
+      value: function mapRelationships(model) {
+        try {
+          if (Array.isArray(model) || !(model[this.options.keys.type] && model[this.options.keys.id])) {
+            for (var i in model) {
+              this.mapRelationships(model[i]);
+            }
+          } else if (model[this.options.keys.relationships]) {
+            var type = model[this.options.keys.type];
+            var id = model[this.options.keys.id];
+
+            for (var _i4 in model[this.options.keys.relationships]) {
+              if (model[this.options.keys.relationships][_i4][this.options.keys.data]) {
+                if (Array.isArray(model[this.options.keys.relationships][_i4][this.options.keys.data])) {
+                  for (var ii in model[this.options.keys.relationships][_i4][this.options.keys.data]) {
+                    var relationType = model[this.options.keys.relationships][_i4][this.options.keys.data][ii][this.options.keys.type];
+                    var relationId = model[this.options.keys.relationships][_i4][this.options.keys.data][ii][this.options.keys.id];
+                    this.mapRelationship(type, id, relationType, relationId);
+                  }
+                } else {
+                  var _relationType = model[this.options.keys.relationships][_i4][this.options.keys.data][this.options.keys.type];
+                  var _relationId = model[this.options.keys.relationships][_i4][this.options.keys.data][this.options.keys.id];
+                  this.mapRelationship(type, id, _relationType, _relationId);
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.error('MAP RELATIONSHIPS', e);
+        }
+      }
+    }, {
+      key: "mapRelationship",
+      value: function mapRelationship(type, id, relationType, relationId) {
+        if (!this._mapRelationships[type]) this._mapRelationships[type] = {};
+        if (!this._mapRelationships[type][id]) this._mapRelationships[type][id] = {};
+        if (!this._mapRelationships[type][id][relationType]) this._mapRelationships[type][id][relationType] = [];
+        if (this._mapRelationships[type][id][relationType].indexOf(relationId) == -1) this._mapRelationships[type][id][relationType].push(relationId); // Reverse map
+
+        if (!this._mapRelationships[relationType]) this._mapRelationships[relationType] = {};
+        if (!this._mapRelationships[relationType][relationId]) this._mapRelationships[relationType][relationId] = {};
+        if (!this._mapRelationships[relationType][relationId][type]) this._mapRelationships[relationType][relationId][type] = [];
+        if (this._mapRelationships[relationType][relationId][type].indexOf(id) == -1) this._mapRelationships[relationType][relationId][type].push(id);
       }
     }, {
       key: "body",
@@ -1989,45 +2040,31 @@ var ActionUI = function (exports) {
       key: "triggerChangesOnRelated",
       value: function triggerChangesOnRelated(type, id) {
         if (!type || !id) return 0;
+        if (!this._mapRelationships[type] || !this._mapRelationships[type][id]) return 0;
         var count = 0;
 
-        for (var _type in this._model) {
-          for (var _id in this._model[_type]) {
-            if (this._model[_type][_id].hasOwnProperty(this.options.keys.relationships)) {
-              for (var _name in this._model[_type][_id][this.options.keys.relationships]) {
-                if (this._model[_type][_id][this.options.keys.relationships][_name].hasOwnProperty(this.options.keys.data)) {
-                  if (Array.isArray(this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data])) {
-                    for (var i in this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data]) {
-                      if (this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data] && type == this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data][i][this.options.keys.type] && id == this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data][i][this.options.keys.id]) {
-                        ++count;
+        for (var relationType in this._mapRelationships[type][id]) {
+          var _iterator3 = _createForOfIteratorHelper(this._mapRelationships[type][id][relationType]),
+              _step3;
 
-                        this._model[_type][_id].triggerChanges({
-                          relationships: {
-                            value: {
-                              type: type,
-                              id: id
-                            }
-                          }
-                        });
-                      }
-                    }
-                  } else {
-                    if (this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data] && type == this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data][this.options.keys.type] && id == this._model[_type][_id][this.options.keys.relationships][_name][this.options.keys.data][this.options.keys.id]) {
-                      ++count;
+          try {
+            for (_iterator3.s(); !(_step3 = _iterator3.n()).done;) {
+              var relationId = _step3.value;
+              ++count;
 
-                      this._model[_type][_id].triggerChanges({
-                        relationships: {
-                          value: {
-                            type: type,
-                            id: id
-                          }
-                        }
-                      });
-                    }
+              this._model[relationType][relationId].triggerChanges({
+                relationships: {
+                  value: {
+                    type: type,
+                    id: id
                   }
                 }
-              }
+              });
             }
+          } catch (err) {
+            _iterator3.e(err);
+          } finally {
+            _iterator3.f();
           }
         }
 
@@ -2095,7 +2132,7 @@ var ActionUI = function (exports) {
 
   var View = /*#__PURE__*/function () {
     function View(name, html, model) {
-      var _this11 = this;
+      var _this12 = this;
 
       _classCallCheck(this, View);
 
@@ -2115,7 +2152,7 @@ var ActionUI = function (exports) {
       this._html = html;
       this._model = model;
       model.watch(function (changes) {
-        return _this11.update(changes);
+        return _this12.update(changes);
       });
 
       if (this.constructor.options.autoCache) {
@@ -2150,28 +2187,31 @@ var ActionUI = function (exports) {
     }, {
       key: "render",
       value: function render() {
-        var _this12 = this;
+        var _this13 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
           view: this
         });
-        Object.assign(this.constructor.options.eventRender.detail, {
+        var eventRender = new CustomEvent(this.constructor.options.eventRender.type, this.constructor.options.eventRender);
+        Object.assign(eventRender.detail, {
           name: this.model.view,
           view: this
         });
         document.querySelectorAll('[ui-view="' + this._name + '"]').forEach(function (_target) {
-          _target.innerHTML = _this12.html;
+          var canceled = !_target.dispatchEvent(eventRender);
 
-          _target.dispatchEvent(_this12.constructor.options.eventRender);
+          if (!canceled) {
+            _target.innerHTML = eventRender.detail.view.html;
 
-          _this12.renderSubviews(_target);
+            _this13.renderSubviews(_target);
+          }
         });
         return Promise.resolve();
       }
     }, {
       key: "renderSubviews",
       value: function renderSubviews(parent) {
-        var _this13 = this;
+        var _this14 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.renderSubviews()', this.name, {
           view: this,
@@ -2180,7 +2220,7 @@ var ActionUI = function (exports) {
         parent.querySelectorAll('[ui-view]').forEach(function (_sub) {
           var viewName = _sub.getAttribute('ui-view');
 
-          var view = _this13.constructor.cache(viewName);
+          var view = _this14.constructor.cache(viewName);
 
           if (view) {
             view.render();
@@ -2258,6 +2298,7 @@ var ActionUI = function (exports) {
     // Automatically cache views when created
     eventRender: new CustomEvent('view.render', {
       bubbles: true,
+      cancelable: true,
       detail: {
         type: 'render',
         name: null,
@@ -2276,7 +2317,7 @@ var ActionUI = function (exports) {
     var _super5 = _createSuper(ViewFile);
 
     function ViewFile(name, file, model) {
-      var _this14;
+      var _this15;
 
       _classCallCheck(this, ViewFile);
 
@@ -2289,9 +2330,9 @@ var ActionUI = function (exports) {
         file = name;
       }
 
-      _this14 = _super5.call(this, name, null, model);
-      _this14.file = file;
-      return _this14;
+      _this15 = _super5.call(this, name, null, model);
+      _this15.file = file;
+      return _this15;
     }
 
     _createClass(ViewFile, [{
@@ -2303,7 +2344,7 @@ var ActionUI = function (exports) {
     }, {
       key: "render",
       value: function render() {
-        var _this15 = this;
+        var _this16 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
           view: this
@@ -2312,7 +2353,7 @@ var ActionUI = function (exports) {
         var _promise = this._html == null ? this.fetch() : Promise.resolve();
 
         return _promise.then(function () {
-          return _get(_getPrototypeOf(ViewFile.prototype), "render", _this15).call(_this15);
+          return _get(_getPrototypeOf(ViewFile.prototype), "render", _this16).call(_this16);
         });
       }
     }, {
@@ -2328,7 +2369,7 @@ var ActionUI = function (exports) {
 
         return fetch;
       }(function () {
-        var _this16 = this;
+        var _this17 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.fetch()', this.name, {
           view: this
@@ -2341,27 +2382,27 @@ var ActionUI = function (exports) {
             throw new Error(response.statusText);
           }
         }).then(function (html) {
-          _this16._html = html;
+          _this17._html = html;
 
-          _this16.fetchAfter(true);
+          _this17.fetchAfter(true);
 
-          return _this16._html;
+          return _this17._html;
         }).catch(function (e) {
-          _this16.fetchAfter(false);
+          _this17.fetchAfter(false);
 
-          throw new Error('File not found: ' + _this16.fileName);
+          throw new Error('File not found: ' + _this17.fileName);
         });
       })
     }, {
       key: "fetchBefore",
       value: function fetchBefore() {
-        var _this17 = this;
+        var _this18 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.fetchBefore()', this.name, {
           view: this
         });
         document.querySelectorAll('[ui-view="' + this._name + '"]').forEach(function (target) {
-          _this17.constructor.setCssClass(target, _options$2.cssClass.loading);
+          _this18.constructor.setCssClass(target, _options$2.cssClass.loading);
         });
 
         if (this.constructor.options.eventFetch) {
@@ -2375,13 +2416,13 @@ var ActionUI = function (exports) {
     }, {
       key: "fetchAfter",
       value: function fetchAfter(success) {
-        var _this18 = this;
+        var _this19 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.fetchAfter()', this.name, {
           view: this
         });
         document.querySelectorAll('[ui-view="' + this._name + '"]').forEach(function (target) {
-          _this18.constructor.setCssClass(target, success ? _options$2.cssClass.success : _options$2.cssClass.fail);
+          _this19.constructor.setCssClass(target, success ? _options$2.cssClass.success : _options$2.cssClass.fail);
         });
 
         if (this.constructor.options.eventFetch) {
@@ -2470,6 +2511,7 @@ var ActionUI = function (exports) {
     }),
     eventRender: new CustomEvent('view.render', {
       bubbles: true,
+      cancelable: true,
       detail: {
         type: 'render',
         view: null
@@ -2497,7 +2539,7 @@ var ActionUI = function (exports) {
     _createClass(ViewHandlebars, [{
       key: "render",
       value: function render() {
-        var _this19 = this;
+        var _this20 = this;
 
         if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
           view: this
@@ -2510,18 +2552,18 @@ var ActionUI = function (exports) {
         }
 
         return _promise.then(function () {
-          return _get(_getPrototypeOf(ViewHandlebars.prototype), "render", _this19).call(_this19);
+          return _get(_getPrototypeOf(ViewHandlebars.prototype), "render", _this20).call(_this20);
         });
       }
     }, {
       key: "fetch",
       value: function fetch() {
-        var _this20 = this;
+        var _this21 = this;
 
         return _get(_getPrototypeOf(ViewHandlebars.prototype), "fetch", this).call(this).then(function (html) {
           if (!('templates' in Handlebars)) Handlebars.templates = [];
-          Handlebars.templates[_this20.file] = Handlebars.compile(html);
-          _this20.html = Handlebars.templates[_this20.file];
+          Handlebars.templates[_this21.file] = Handlebars.compile(html);
+          _this21.html = Handlebars.templates[_this21.file];
           return html;
         });
       } // #region Static methods
@@ -2602,7 +2644,7 @@ var ActionUI = function (exports) {
     }, {
       key: "navigate",
       value: function navigate(route) {
-        var _this21 = this;
+        var _this22 = this;
 
         var data = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
         var event = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : null;
@@ -2713,11 +2755,11 @@ var ActionUI = function (exports) {
           var viewContainer = document.querySelectorAll('[ui-view="' + this.view.name + '"]');
           this.handleLoading(viewContainer, true);
           result.then(function () {
-            return _this21.handleLoading(viewContainer, false);
+            return _this22.handleLoading(viewContainer, false);
           }).catch(function (e) {
-            _this21.handleLoading(viewContainer, false);
+            _this22.handleLoading(viewContainer, false);
 
-            _this21.handleError(controller, model, path, e);
+            _this22.handleError(controller, model, path, e);
 
             throw e;
           });

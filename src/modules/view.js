@@ -56,7 +56,10 @@ class View
     {
 		if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, { view: this })
 
-		Object.assign(this.constructor.options.eventRender.detail, {
+		let eventRender = new CustomEvent(this.constructor.options.eventRender.type, this.constructor.options.eventRender)
+
+		Object.assign(eventRender.detail,
+        {
 			name: this.model.view,
 			view: this
 		})
@@ -65,9 +68,12 @@ class View
             .querySelectorAll('[ui-view="'+this._name+'"]')
             .forEach((_target) =>
             {
-				_target.innerHTML = this.html
-				_target.dispatchEvent(this.constructor.options.eventRender)
-                this.renderSubviews(_target)
+				let canceled = !_target.dispatchEvent(eventRender)
+				if (!canceled)
+				{
+					_target.innerHTML = eventRender.detail.view.html
+                    this.renderSubviews(_target)
+                }
             })
         
         return Promise.resolve()
@@ -138,7 +144,7 @@ let _cache = {}
 let _options = {
     verbose: false,
     autoCache: true, // Automatically cache views when created
-    eventRender: new CustomEvent('view.render', { bubbles: true, detail: { type: 'render', name: null, view: null } })
+    eventRender: new CustomEvent('view.render', { bubbles: true, cancelable: true, detail: { type: 'render', name: null, view: null } })
 }
 
 export { View }

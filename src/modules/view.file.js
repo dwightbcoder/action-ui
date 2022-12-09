@@ -150,7 +150,7 @@ let _options = {
 	extension: 'html',
 	cssClass: { 'loading': 'loading', 'success': 'success', 'fail': 'fail' },
 	eventFetch: new CustomEvent('view.fetch', { bubbles: true, detail: { type: 'fetch', view: null, success: null } }),
-	eventRender: new CustomEvent('view.render', { bubbles: true, detail: { type: 'render', view: null } })
+	eventRender: new CustomEvent('view.render', { bubbles: true, cancelable: true, detail: { type: 'render', view: null } })
 }
 ViewFile.options = View.options
 
