@@ -2193,15 +2193,21 @@ var ActionUI = function (exports) {
           view: this
         });
         var eventRender = new CustomEvent(this.constructor.options.eventRender.type, this.constructor.options.eventRender);
+        Object.assign(eventRenderBefore.detail, {
+          name: this.model.view,
+          view: this
+        });
         Object.assign(eventRender.detail, {
           name: this.model.view,
           view: this
         });
         document.querySelectorAll('[ui-view="' + this._name + '"]').forEach(function (_target) {
-          var canceled = !_target.dispatchEvent(eventRender);
+          var canceled = !_target.dispatchEvent(eventRenderBefore);
 
           if (!canceled) {
             _target.innerHTML = eventRender.detail.view.html;
+
+            _target.dispatchEvent(eventRender);
 
             _this13.renderSubviews(_target);
           }
@@ -2296,6 +2302,15 @@ var ActionUI = function (exports) {
     verbose: false,
     autoCache: true,
     // Automatically cache views when created
+    eventRenderBefore: new CustomEvent('view.render.before', {
+      bubbles: true,
+      cancelable: true,
+      detail: {
+        type: 'render.before',
+        name: null,
+        view: null
+      }
+    }),
     eventRender: new CustomEvent('view.render', {
       bubbles: true,
       cancelable: true,

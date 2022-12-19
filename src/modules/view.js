@@ -58,6 +58,11 @@ class View
 
 		let eventRender = new CustomEvent(this.constructor.options.eventRender.type, this.constructor.options.eventRender)
 
+		Object.assign(eventRenderBefore.detail, {
+			name: this.model.view,
+			view: this
+		})
+
 		Object.assign(eventRender.detail,
         {
 			name: this.model.view,
@@ -68,10 +73,11 @@ class View
             .querySelectorAll('[ui-view="'+this._name+'"]')
             .forEach((_target) =>
             {
-				let canceled = !_target.dispatchEvent(eventRender)
+				let canceled = !_target.dispatchEvent(eventRenderBefore)
 				if (!canceled)
 				{
 					_target.innerHTML = eventRender.detail.view.html
+					_target.dispatchEvent(eventRender)
                     this.renderSubviews(_target)
                 }
             })
@@ -144,6 +150,7 @@ let _cache = {}
 let _options = {
     verbose: false,
     autoCache: true, // Automatically cache views when created
+    eventRenderBefore: new CustomEvent('view.render.before', { bubbles: true, cancelable: true, detail: { type: 'render.before', name: null, view: null } }),
     eventRender: new CustomEvent('view.render', { bubbles: true, cancelable: true, detail: { type: 'render', name: null, view: null } })
 }
 
