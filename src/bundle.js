@@ -1851,6 +1851,7 @@ var ActionUI = (function (exports) {
 			if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, { view: this });
 
 			let eventRender = new CustomEvent(this.constructor.options.eventRender.type, this.constructor.options.eventRender);
+	        let eventRenderBefore = new CustomEvent(this.constructor.options.eventRenderBefore.type, this.constructor.options.eventRenderBefore);
 
 			Object.assign(eventRenderBefore.detail, {
 				name: this.model.view,

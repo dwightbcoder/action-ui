@@ -2193,6 +2193,7 @@ var ActionUI = function (exports) {
           view: this
         });
         var eventRender = new CustomEvent(this.constructor.options.eventRender.type, this.constructor.options.eventRender);
+        var eventRenderBefore = new CustomEvent(this.constructor.options.eventRenderBefore.type, this.constructor.options.eventRenderBefore);
         Object.assign(eventRenderBefore.detail, {
           name: this.model.view,
           view: this
