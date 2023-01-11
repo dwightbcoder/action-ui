@@ -820,6 +820,7 @@ var ActionUI = (function (exports) {
 				'searchDepth': 1,
 				'triggerChangesOnError': true, // Allows views to update contents on failed requests, especially useful for Fetch All requests which return no results or 404
 				'triggerChangesOnEmpty': true,
+				'useUrlCache': true,
 				'verbose': false,
 				'viewClass': null,
 				'viewMap': {},
@@ -1235,6 +1236,9 @@ var ActionUI = (function (exports) {
 
 		urlCache(url, model = null, json = null)
 		{
+			if (!this.options.useUrlCache)
+				return false
+
 			url = decodeURIComponent(url);
 
 			if (!model && !json)
@@ -1344,7 +1348,7 @@ var ActionUI = (function (exports) {
 		{
 			let pageKey = this.pageKey(pageSize, query);
 
-			if (!type || !this._model[type]._paging || !this._model[type]._paging[pageKey][pageNumber])
+			if (!type || !pageKey || !pageNumber || !pageSize || !this._model[type]._paging || !this._model[type]._paging[pageKey][pageNumber])
 				return false
 
 			this._model[type]._paging.pageNumber = pageNumber;
