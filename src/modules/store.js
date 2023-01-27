@@ -4,7 +4,7 @@ import { Action } from './action.js'
 
 /**
  * Store
- * @version 20220708
+ * @version 20230126
  * @description Remote data store
  * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
  */
@@ -117,6 +117,8 @@ class Store
 		{
 			this._model[type][id] = new Model({_type:type}, { model: this._model[type], property: id })
 		}
+
+		return id ? this._model[type][id] : this._model[type]
 	}
 
 	actionCreate(type, method)

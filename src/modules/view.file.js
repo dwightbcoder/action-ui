@@ -121,16 +121,18 @@ class ViewFile extends View
 	// #region Static methods
 
 	// View factory
-	static create(options)
+	static create(options, fromCache = true)
 	{
-		if (this.options.verbose) console.info(this.name + ':create()', { options: options })
+		if (this.options.verbose) console.info(this.name + ':create()', { options, fromCache })
 
-		if (options.file)
+		if (!options.file)
 		{
 			options.file = options.name
 		}
 
-		return new this(options.name, options.file, options.model)
+        return (fromCache && options.name)
+			? (this.cache(options.name) || new this(options.name, options.file, options.model))
+			: new this(options.name, options.file, options.model)
 	}
 
 	static setCssClass(target, cssClass)

@@ -220,8 +220,10 @@ class Action
 		})
 	}
 
-	static create(options)
+	static create(options, fromCache = true)
 	{
+		if (_options.verbose) console.info(this.name + ':create()', { options, fromCache })
+
 		if ('name' in options === false) throw 'No action name specfied'
 
 		if ('handler' in options === false)
@@ -236,7 +238,9 @@ class Action
 			}
 		}
 
-		return new Action(options.name, options.handler, options.model)
+        return fromCache
+            ? (this.cache(options.name) || new this(options.name, options.handler, options.model))
+            : new this(options.name, options.handler, options.model)
 	}
 
 	static createFromElement(element, options = {})

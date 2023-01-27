@@ -110,10 +110,13 @@ class View
     // #region Static methods
 
     // View factory
-    static create(options)
+    static create(options, fromCache = true)
     {
-        if ( this.options.verbose ) console.info( this.name + ':create()', {options:options} )
-        return new this(options.name, options.html, options.model)
+        if ( this.options.verbose ) console.info( this.name + ':create()', {options, fromCache} )
+
+        return (fromCache && options.name)
+            ? (this.cache(options.name) || new this(options.name, options.html, options.model))
+            : new this(options.name, options.html, options.model)
     }
 
     // Cache a view 

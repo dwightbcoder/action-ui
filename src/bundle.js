@@ -542,8 +542,10 @@ var ActionUI = (function (exports) {
 			});
 		}
 
-		static create(options)
+		static create(options, fromCache = true)
 		{
+			if (_options.verbose) console.info(this.name + ':create()', { options, fromCache });
+
 			if ('name' in options === false) throw 'No action name specfied'
 
 			if ('handler' in options === false)
@@ -558,7 +560,9 @@ var ActionUI = (function (exports) {
 				}
 			}
 
-			return new Action(options.name, options.handler, options.model)
+	        return fromCache
+	            ? (this.cache(options.name) || new this(options.name, options.handler, options.model))
+	            : new this(options.name, options.handler, options.model)
 		}
 
 		static createFromElement(element, options = {})
@@ -790,7 +794,7 @@ var ActionUI = (function (exports) {
 
 	/**
 	 * Store
-	 * @version 20220708
+	 * @version 20230126
 	 * @description Remote data store
 	 * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
 	 */
@@ -903,6 +907,8 @@ var ActionUI = (function (exports) {
 			{
 				this._model[type][id] = new Model({_type:type}, { model: this._model[type], property: id });
 			}
+
+			return id ? this._model[type][id] : this._model[type]
 		}
 
 		actionCreate(type, method)
@@ -1908,10 +1914,13 @@ var ActionUI = (function (exports) {
 	    // #region Static methods
 
 	    // View factory
-	    static create(options)
+	    static create(options, fromCache = true)
 	    {
-	        if ( this.options.verbose ) console.info( this.name + ':create()', {options:options} );
-	        return new this(options.name, options.html, options.model)
+	        if ( this.options.verbose ) console.info( this.name + ':create()', {options, fromCache} );
+
+	        return (fromCache && options.name)
+	            ? (this.cache(options.name) || new this(options.name, options.html, options.model))
+	            : new this(options.name, options.html, options.model)
 	    }
 
 	    // Cache a view 
@@ -2073,16 +2082,18 @@ var ActionUI = (function (exports) {
 		// #region Static methods
 
 		// View factory
-		static create(options)
+		static create(options, fromCache = true)
 		{
-			if (this.options.verbose) console.info(this.name + ':create()', { options: options });
+			if (this.options.verbose) console.info(this.name + ':create()', { options, fromCache });
 
-			if (options.file)
+			if (!options.file)
 			{
 				options.file = options.name;
 			}
 
-			return new this(options.name, options.file, options.model)
+	        return (fromCache && options.name)
+				? (this.cache(options.name) || new this(options.name, options.file, options.model))
+				: new this(options.name, options.file, options.model)
 		}
 
 		static setCssClass(target, cssClass)

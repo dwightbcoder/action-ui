@@ -419,6 +419,11 @@ var ActionUI = function (exports) {
       });
     }
     static create(options) {
+      let fromCache = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : true;
+      if (_options.verbose) console.info(this.name + ':create()', {
+        options,
+        fromCache
+      });
       if ('name' in options === false) throw 'No action name specfied';
       if ('handler' in options === false) {
         if ('url' in options === true && options.url) {
@@ -427,7 +432,7 @@ var ActionUI = function (exports) {
           options.handler = null;
         }
       }
-      return new Action(options.name, options.handler, options.model);
+      return fromCache ? this.cache(options.name) || new this(options.name, options.handler, options.model) : new this(options.name, options.handler, options.model);
     }
     static createFromElement(element) {
       let options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
@@ -631,7 +636,7 @@ var ActionUI = function (exports) {
 
   /**
    * Store
-   * @version 20220708
+   * @version 20230126
    * @description Remote data store
    * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
    */
@@ -758,6 +763,7 @@ var ActionUI = function (exports) {
           property: id
         });
       }
+      return id ? this._model[type][id] : this._model[type];
     }
     actionCreate(type, method) {
       method = method.toLowerCase();
@@ -1562,10 +1568,12 @@ var ActionUI = function (exports) {
 
     // View factory
     static create(options) {
+      let fromCache = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : true;
       if (this.options.verbose) console.info(this.name + ':create()', {
-        options: options
+        options,
+        fromCache
       });
-      return new this(options.name, options.html, options.model);
+      return fromCache && options.name ? this.cache(options.name) || new this(options.name, options.html, options.model) : new this(options.name, options.html, options.model);
     }
 
     // Cache a view 
@@ -1719,13 +1727,15 @@ var ActionUI = function (exports) {
 
     // View factory
     static create(options) {
+      let fromCache = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : true;
       if (this.options.verbose) console.info(this.name + ':create()', {
-        options: options
+        options,
+        fromCache
       });
-      if (options.file) {
+      if (!options.file) {
         options.file = options.name;
       }
-      return new this(options.name, options.file, options.model);
+      return fromCache && options.name ? this.cache(options.name) || new this(options.name, options.file, options.model) : new this(options.name, options.file, options.model);
     }
     static setCssClass(target, cssClass) {
       for (var i in _options$2.cssClass) target.classList.remove(_options$2.cssClass[i]);
