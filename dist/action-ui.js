@@ -923,8 +923,14 @@ var ActionUI = function (exports) {
         if (url.indexOf('/') > 0) url = '/' + url;
         url = location.origin + url;
       }
+      let urlBase = this.options.baseUrl;
+      if (urlBase.indexOf('://') == -1) {
+        if (urlBase.indexOf('/') > 0) urlBase = '/' + urlBase;
+        urlBase = location.origin + urlBase;
+      }
       let uri = new URL(url);
-      let parts = uri.pathname.replace(this.options.baseUrl, '').split('/');
+      let uriBase = new URL(urlBase);
+      let parts = uri.pathname.replace(uriBase.pathname, '').split('/');
       let type = parts[0] || parts[1];
       uri.searchParams.sort();
       let query = {};
