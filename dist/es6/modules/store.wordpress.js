@@ -21,9 +21,9 @@ class StoreWordpress extends Store
             },
             query: {
                 'page[number]' : 'page',
-                'page[size]'   : 'per_page'
+                'page[size]'   : 'defaultPageSize'
             },
-            per_page: 10
+            defaultPageSize: 10
         }
 
         Util.deepAssign(_options, options||{})

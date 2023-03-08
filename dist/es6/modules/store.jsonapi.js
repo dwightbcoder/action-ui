@@ -21,7 +21,7 @@ class StoreJsonApi extends Store
                 'page[number]' : 'page[number]',
                 'page[size]'   : 'page[size]'
             },
-            'per_page': 0,
+            'defaultPageSize': 0,
             'fetch': {
                 'headers': { 'Content-Type': 'application/vnd.api+json' }
             },

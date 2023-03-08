@@ -651,7 +651,7 @@ var ActionUI = function (exports) {
           'id': 'id'
         },
         'keysExcludeFromCache': [],
-        'per_page': 0,
+        'defaultPageSize': 0,
         'query': {
           'page[number]': 'page[number]',
           'page[size]': 'page[size]'
@@ -1094,10 +1094,10 @@ var ActionUI = function (exports) {
       };
     }
     async pagingReset(type) {
+      let pageNumber = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 1;
+      let pageSize = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
+      let pageQuery = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : {};
       this.urlCacheClear(type, true);
-      let pageNumber = false;
-      let pageSize = false;
-      let pageQuery = false;
       if (this._model[type]._paging) {
         if (this._model[type]._paging.current) {
           pageNumber = this._model[type]._paging.current.pageNumber;
@@ -1107,14 +1107,14 @@ var ActionUI = function (exports) {
         }
         delete this._model[type]._paging;
       }
-      return pageNumber && pageSize ? this.page(type, pageNumber, pageSize, pageQuery) : Promise.resolve();
+      return this.page(type, pageNumber, pageSize, pageQuery);
     }
     async page(type) {
       let pageNumber = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 1;
       let pageSize = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
       let query = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : {};
       query = query || {};
-      pageSize = parseInt(pageSize) || this.options.per_page;
+      pageSize = parseInt(pageSize) || this.options.defaultPageSize;
       pageNumber = parseInt(pageNumber) || 1;
       query.type = type;
       query[this.options.query['page[number]']] = pageNumber;
@@ -1201,7 +1201,7 @@ var ActionUI = function (exports) {
       return fetch(url, options).then(response => response.json().then(json => response.ok ? json : Promise.reject(json))).then(json => {
         delete this._model[type][id];
         return json;
-      }).then(() => this.pagingReset(type).catch(_ => {})).catch(error => {
+      }).then(() => this._model[type]._paging ? this.pagingReset(type).catch(_ => {}) : Promise.resolve()).catch(error => {
         if (this.options.triggerChangesOnError) this.model(type).triggerChanges();
         return Promise.reject(error);
       });
@@ -1318,7 +1318,7 @@ var ActionUI = function (exports) {
           'page[number]': 'page[number]',
           'page[size]': 'page[size]'
         },
-        'per_page': 0,
+        'defaultPageSize': 0,
         'fetch': {
           'headers': {
             'Content-Type': 'application/vnd.api+json'
@@ -1456,9 +1456,9 @@ var ActionUI = function (exports) {
         },
         query: {
           'page[number]': 'page',
-          'page[size]': 'per_page'
+          'page[size]': 'defaultPageSize'
         },
-        per_page: 10
+        defaultPageSize: 10
       };
       deepAssign(_options, options || {});
       super(_options);

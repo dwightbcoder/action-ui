@@ -811,7 +811,7 @@ var ActionUI = (function (exports) {
 					'id': 'id'
 				},
 				'keysExcludeFromCache': [],
-				'per_page': 0,
+				'defaultPageSize': 0,
 				'query': {
 					'page[number]': 'page[number]',
 					'page[size]': 'page[size]'
@@ -1320,13 +1320,9 @@ var ActionUI = (function (exports) {
 			return this.model(type)._paging || { current: false, pageNumber: false, pageSize: false, pageKey: false }
 		}
 
-		async pagingReset(type)
+		async pagingReset(type, pageNumber = 1, pageSize = 0, pageQuery = {})
 		{
 			this.urlCacheClear(type, true);
-
-			let pageNumber = false;
-			let pageSize = false;
-			let pageQuery = false;
 
 			if (this._model[type]._paging)
 			{
@@ -1342,13 +1338,13 @@ var ActionUI = (function (exports) {
 				delete this._model[type]._paging;
 			}
 
-			return pageNumber && pageSize ? this.page(type, pageNumber, pageSize, pageQuery) : Promise.resolve()
+			return this.page(type, pageNumber, pageSize, pageQuery)
 		}
 
 		async page(type, pageNumber = 1, pageSize = 0, query = {})
 		{
 			query = query || {};
-			pageSize = parseInt(pageSize) || this.options.per_page;
+			pageSize = parseInt(pageSize) || this.options.defaultPageSize;
 			pageNumber = parseInt(pageNumber) || 1;
 
 			query.type = type;
@@ -1444,7 +1440,7 @@ var ActionUI = (function (exports) {
 			return fetch(url, options)
 				.then(response => response.json().then(json => response.ok ? json : Promise.reject(json)))
 				.then(json => { delete this._model[type][id]; return json })
-				.then(() => this.pagingReset(type).catch(_ => {}))
+				.then(() => this._model[type]._paging ? this.pagingReset(type).catch(_ => {}) : Promise.resolve())
 				.catch(error =>
 				{
 					if (this.options.triggerChangesOnError) this.model(type).triggerChanges();
@@ -1597,7 +1593,7 @@ var ActionUI = (function (exports) {
 	                'page[number]' : 'page[number]',
 	                'page[size]'   : 'page[size]'
 	            },
-	            'per_page': 0,
+	            'defaultPageSize': 0,
 	            'fetch': {
 	                'headers': { 'Content-Type': 'application/vnd.api+json' }
 	            },
@@ -1792,9 +1788,9 @@ var ActionUI = (function (exports) {
 	            },
 	            query: {
 	                'page[number]' : 'page',
-	                'page[size]'   : 'per_page'
+	                'page[size]'   : 'defaultPageSize'
 	            },
-	            per_page: 10
+	            defaultPageSize: 10
 	        };
 
 	        deepAssign(_options, options||{});
