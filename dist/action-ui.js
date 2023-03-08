@@ -808,6 +808,7 @@ var ActionUI = function (exports) {
       let skipPaging = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
       let data = this.data(json);
       if (!data || Object.keys(data).length == 0) {
+        if (!skipPaging) this.syncPaging(json, url);
         throw new Error('Store: No data to sync');
       }
       if (data instanceof Array) {
@@ -1094,10 +1095,10 @@ var ActionUI = function (exports) {
       };
     }
     async pagingReset(type) {
-      let pageNumber = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 1;
-      let pageSize = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
-      let pageQuery = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : {};
       this.urlCacheClear(type, true);
+      let pageNumber = false;
+      let pageSize = false;
+      let pageQuery = false;
       if (this._model[type]._paging) {
         if (this._model[type]._paging.current) {
           pageNumber = this._model[type]._paging.current.pageNumber;
@@ -1107,7 +1108,7 @@ var ActionUI = function (exports) {
         }
         delete this._model[type]._paging;
       }
-      return this.page(type, pageNumber, pageSize, pageQuery);
+      return pageNumber && pageSize ? this.page(type, pageNumber, pageSize, pageQuery) : Promise.resolve();
     }
     async page(type) {
       let pageNumber = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 1;
@@ -1201,7 +1202,7 @@ var ActionUI = function (exports) {
       return fetch(url, options).then(response => response.json().then(json => response.ok ? json : Promise.reject(json))).then(json => {
         delete this._model[type][id];
         return json;
-      }).then(() => this._model[type]._paging ? this.pagingReset(type).catch(_ => {}) : Promise.resolve()).catch(error => {
+      }).then(() => this.pagingReset(type).catch(_ => {})).catch(error => {
         if (this.options.triggerChangesOnError) this.model(type).triggerChanges();
         return Promise.reject(error);
       });

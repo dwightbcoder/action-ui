@@ -176,6 +176,7 @@ class Store
 
 		if (!data || Object.keys(data).length == 0)
 		{
+			if (!skipPaging) this.syncPaging(json, url)
 			throw new Error('Store: No data to sync')
 		}
 
@@ -530,9 +531,13 @@ class Store
 		return this.model(type)._paging || { current: false, pageNumber: false, pageSize: false, pageKey: false }
 	}
 
-	async pagingReset(type, pageNumber = 1, pageSize = 0, pageQuery = {})
+	async pagingReset(type)
 	{
 		this.urlCacheClear(type, true)
+
+		let pageNumber = false
+		let pageSize = false
+		let pageQuery = false
 
 		if (this._model[type]._paging)
 		{
@@ -548,7 +553,7 @@ class Store
 			delete this._model[type]._paging
 		}
 
-		return this.page(type, pageNumber, pageSize, pageQuery)
+		return pageNumber && pageSize ? this.page(type, pageNumber, pageSize, pageQuery) : Promise.resolve()
 	}
 
 	async page(type, pageNumber = 1, pageSize = 0, query = {})
@@ -650,7 +655,7 @@ class Store
 		return fetch(url, options)
 			.then(response => response.json().then(json => response.ok ? json : Promise.reject(json)))
 			.then(json => { delete this._model[type][id]; return json })
-			.then(() => this._model[type]._paging ? this.pagingReset(type).catch(_ => {}) : Promise.resolve())
+			.then(() => this.pagingReset(type).catch(_ => {}))
 			.catch(error =>
 			{
 				if (this.options.triggerChangesOnError) this.model(type).triggerChanges()
