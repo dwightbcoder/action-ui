@@ -597,17 +597,17 @@ class Store
 		return searchParams.toString()
 	}
 
-	post(type, data)
+	post(type, data, query = {})
 	{
 		type = type || this.type(data)
-		let url = this.url({ type: type, id: this.id(data) })
+		let url = this.url(Object.assign({}, query, { type: type, id: this.id(data) }))
 		let options = Object.create(this.options.fetch)
 
 		options.method = 'POST'
 		options.body = this.body(type, data)
 
 		if (this.options.verbose)
-			console.info('Store.post()', type, { type: type, data: data, store: this, url: url, options: options })
+			console.info('Store.post()', type, { type: type, data: data, query: query, store: this, url: url, options: options })
 
 		return fetch(url, options)
 			.then(response => response.json().then(json => response.ok ? json : Promise.reject(json)))
@@ -619,10 +619,10 @@ class Store
 			})
 	}
 
-	patch(type, data)
+	patch(type, data, query = {})
 	{
 		type = type || this.type(data)
-		let url = this.url({ type: type, id: this.id(data) })
+		let url = this.url(Object.assign({}, query, { type: type, id: this.id(data) }))
 		let options = {}
 		Util.deepCopy(options, this.options.fetch)//Object.create(this.options.fetch)
 
@@ -630,7 +630,7 @@ class Store
 		options.body = this.body(type, data)
 
 		if (this.options.verbose)
-			console.info('Store.patch()', type, { type: type, data: data, store: this, url: url, options: options })
+			console.info('Store.patch()', type, { type: type, data: data, query: query, store: this, url: url, options: options })
 
 		return fetch(url, options)
 			.then(response => response.json().then(json => response.ok ? json : Promise.reject(json)))
@@ -642,15 +642,15 @@ class Store
 			})
 	}
 
-	delete(type, id)
+	delete(type, id, query = {})
 	{
 		let options = Object.create(this.options.fetch)
 		options.method = 'DELETE'
 
-		let url = this.url({ type: type, id: id })
+		let url = this.url(Object.assign({}, query, { type: type, id: id }))
 
 		if (this.options.verbose)
-			console.info('Store.delete()', type, id, { type: type, id: id, store: this, url: url, options: options })
+			console.info('Store.delete()', type, id, { type: type, id: id, query: query, store: this, url: url, options: options })
 
 		return fetch(url, options)
 			.then(response => response.json().then(json => response.ok ? json : Promise.reject(json)))
