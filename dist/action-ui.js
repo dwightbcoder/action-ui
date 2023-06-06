@@ -1142,17 +1142,19 @@ var ActionUI = function (exports) {
       return searchParams.toString();
     }
     post(type, data) {
+      let query = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
       type = type || this.type(data);
-      let url = this.url({
+      let url = this.url(Object.assign({}, query, {
         type: type,
         id: this.id(data)
-      });
+      }));
       let options = Object.create(this.options.fetch);
       options.method = 'POST';
       options.body = this.body(type, data);
       if (this.options.verbose) console.info('Store.post()', type, {
         type: type,
         data: data,
+        query: query,
         store: this,
         url: url,
         options: options
@@ -1163,11 +1165,12 @@ var ActionUI = function (exports) {
       });
     }
     patch(type, data) {
+      let query = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
       type = type || this.type(data);
-      let url = this.url({
+      let url = this.url(Object.assign({}, query, {
         type: type,
         id: this.id(data)
-      });
+      }));
       let options = {};
       deepCopy(options, this.options.fetch); //Object.create(this.options.fetch)
 
@@ -1176,6 +1179,7 @@ var ActionUI = function (exports) {
       if (this.options.verbose) console.info('Store.patch()', type, {
         type: type,
         data: data,
+        query: query,
         store: this,
         url: url,
         options: options
@@ -1186,15 +1190,17 @@ var ActionUI = function (exports) {
       });
     }
     delete(type, id) {
+      let query = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
       let options = Object.create(this.options.fetch);
       options.method = 'DELETE';
-      let url = this.url({
+      let url = this.url(Object.assign({}, query, {
         type: type,
         id: id
-      });
+      }));
       if (this.options.verbose) console.info('Store.delete()', type, id, {
         type: type,
         id: id,
+        query: query,
         store: this,
         url: url,
         options: options
