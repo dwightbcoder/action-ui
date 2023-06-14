@@ -100,7 +100,7 @@ class Store
 
 		if (!this._model[type])
 		{
-			this._model[type] = new Model({_type:type, _loading:false}, { model: this._model, property: type })
+			this._model[type] = new Model({_type:type}, { model: this._model, property: type })
 
 			this.actionCreate(type, 'get')
 			this.actionCreate(type, 'post')
@@ -109,7 +109,18 @@ class Store
 
 			if (this.options.viewClass && this.options.viewMap.hasOwnProperty(type))
 			{
-				new this.options.viewClass(this.options.viewMap[type], this._model[type])
+				if (Array.isArray(this.options.viewMap[type]))
+				{
+					for (let viewName of this.options.viewMap[type])
+					{
+						this.options.viewClass.create({ name: viewName, file: viewName, model: this._model[type] })
+					}
+				}
+				else
+				{
+					let viewName = this.options.viewMap[type]
+					this.options.viewClass.create({ name: viewName, file: viewName, model: this._model[type] })
+				}
 			}
 		}
 
@@ -674,10 +685,10 @@ class Store
 
 		if (arguments.length == 1)
 		{
-			return model._loading
+			return model.loading()
 		}
 
-		model._loading = !!isLoading
+		model.loading(isLoading)
 	}
 
 	before(type, fetch, data)

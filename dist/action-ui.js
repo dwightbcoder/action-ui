@@ -130,6 +130,7 @@ var ActionUI = function (exports) {
       proxy._watchers = [];
       proxy._timer = null;
       proxy._parent = parent; //{ model: null, property: null }
+      proxy._loading = false;
 
       // Sync initial data
       proxy.sync(data);
@@ -148,6 +149,12 @@ var ActionUI = function (exports) {
         }
       }
       return this;
+    }
+    loading(isLoading) {
+      if (arguments.length == 0) {
+        return this._loading;
+      }
+      this._loading = !!isLoading;
     }
 
     // Sync data object to model
@@ -741,8 +748,7 @@ var ActionUI = function (exports) {
       if (!('string' == typeof type)) throw new Error('Store: Cannot create model without `type`');
       if (!this._model[type]) {
         this._model[type] = new Model({
-          _type: type,
-          _loading: false
+          _type: type
         }, {
           model: this._model,
           property: type
@@ -752,7 +758,22 @@ var ActionUI = function (exports) {
         this.actionCreate(type, 'patch');
         this.actionCreate(type, 'delete');
         if (this.options.viewClass && this.options.viewMap.hasOwnProperty(type)) {
-          new this.options.viewClass(this.options.viewMap[type], this._model[type]);
+          if (Array.isArray(this.options.viewMap[type])) {
+            for (let viewName of this.options.viewMap[type]) {
+              this.options.viewClass.create({
+                name: viewName,
+                file: viewName,
+                model: this._model[type]
+              });
+            }
+          } else {
+            let viewName = this.options.viewMap[type];
+            this.options.viewClass.create({
+              name: viewName,
+              file: viewName,
+              model: this._model[type]
+            });
+          }
         }
       }
       if (id != null && ('string' == typeof id || 'number' == typeof id) && !this._model[type][id]) {
@@ -1219,9 +1240,9 @@ var ActionUI = function (exports) {
       }
       const model = this.model(type);
       if (arguments.length == 1) {
-        return model._loading;
+        return model.loading();
       }
-      model._loading = !!isLoading;
+      model.loading(isLoading);
     }
     before(type, fetch, data) {
       let _name = this.options.baseUrl + '/' + type;

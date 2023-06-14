@@ -27,6 +27,7 @@ class Model
 		proxy._watchers = []
 		proxy._timer = null
 		proxy._parent = parent //{ model: null, property: null }
+		proxy._loading = false
 
 		// Sync initial data
 		proxy.sync(data)
@@ -53,6 +54,16 @@ class Model
 		}
 
 		return this
+	}
+
+	loading(isLoading)
+	{
+		if (arguments.length == 0)
+		{
+			return this._loading
+		}
+
+		this._loading = !!isLoading
 	}
 
 	// Sync data object to model
