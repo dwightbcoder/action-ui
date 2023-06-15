@@ -699,7 +699,8 @@ var ActionUI = function (exports) {
             fetch: null,
             data: null,
             model: null,
-            view: null
+            view: null,
+            query: null
           }
         }),
         eventAfter: new CustomEvent('store.after', {
@@ -712,7 +713,9 @@ var ActionUI = function (exports) {
             model: null,
             view: null,
             success: null,
-            response: null
+            response: null,
+            json: null,
+            query: null
           }
         })
       };
@@ -1035,8 +1038,8 @@ var ActionUI = function (exports) {
         }
         this.before(type, this.options.fetch, eventData);
         const response = await fetch(url, this.options.fetch);
-        this.after(type, this.options.fetch, eventData, response ? response.ok : false, response);
-        const json = await response.json();
+        let json = response.ok == true ? await response.json() : {};
+        this.after(type, this.options.fetch, eventData, response ? response.ok : false, response, json);
         if (!response.ok) {
           if (type && this.options.triggerChangesOnError && this._model[type]) this.model(type).triggerChanges();
           return Promise.reject(json);
@@ -1165,13 +1168,15 @@ var ActionUI = function (exports) {
     post(type, data) {
       let query = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
       type = type || this.type(data);
+      let options = {};
+      deepCopy(options, this.options.fetch);
+      options.method = 'POST';
+      options.body = this.body(type, data);
+      this.before(type, options, data, query);
       let url = this.url(Object.assign({}, query, {
         type: type,
         id: this.id(data)
       }));
-      let options = Object.create(this.options.fetch);
-      options.method = 'POST';
-      options.body = this.body(type, data);
       if (this.options.verbose) console.info('Store.post()', type, {
         type: type,
         data: data,
@@ -1180,7 +1185,13 @@ var ActionUI = function (exports) {
         url: url,
         options: options
       });
-      return fetch(url, options).then(response => response.json().then(json => response.ok ? json : Promise.reject(json))).then(json => this.sync(json, url)).catch(error => {
+      return fetch(url, options).then(response => {
+        if (!response.ok) return Promise.reject(json);
+        return response.json().then(json => {
+          this.after(type, options, data, response ? response.ok : false, response, json, query);
+          return json;
+        });
+      }).then(json => this.sync(json, url)).catch(error => {
         if (this.options.triggerChangesOnError) this.model(type).triggerChanges();
         return Promise.reject(error);
       });
@@ -1188,15 +1199,15 @@ var ActionUI = function (exports) {
     patch(type, data) {
       let query = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
       type = type || this.type(data);
+      let options = {};
+      deepCopy(options, this.options.fetch);
+      options.method = 'PATCH';
+      options.body = this.body(type, data);
+      this.before(type, options, data, query);
       let url = this.url(Object.assign({}, query, {
         type: type,
         id: this.id(data)
       }));
-      let options = {};
-      deepCopy(options, this.options.fetch); //Object.create(this.options.fetch)
-
-      options.method = 'PATCH';
-      options.body = this.body(type, data);
       if (this.options.verbose) console.info('Store.patch()', type, {
         type: type,
         data: data,
@@ -1205,28 +1216,44 @@ var ActionUI = function (exports) {
         url: url,
         options: options
       });
-      return fetch(url, options).then(response => response.json().then(json => response.ok ? json : Promise.reject(json))).then(json => this.sync(json, url)).catch(error => {
+      return fetch(url, options).then(response => {
+        if (!response.ok) return Promise.reject(json);
+        return response.json().then(json => {
+          this.after(type, options, data, response ? response.ok : false, response, json, query);
+          return json;
+        });
+      }).then(json => this.sync(json, url)).catch(error => {
         if (this.options.triggerChangesOnError) this.model(type).triggerChanges();
         return Promise.reject(error);
       });
     }
     delete(type, id) {
       let query = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
-      let options = Object.create(this.options.fetch);
+      let data = {};
+      data[this.options.keys.id] = id;
+      let options = {};
+      deepCopy(options, this.options.fetch);
       options.method = 'DELETE';
+      this.before(type, options, data, query);
       let url = this.url(Object.assign({}, query, {
         type: type,
-        id: id
+        id: data.id
       }));
       if (this.options.verbose) console.info('Store.delete()', type, id, {
         type: type,
-        id: id,
+        id: data.id,
         query: query,
         store: this,
         url: url,
         options: options
       });
-      return fetch(url, options).then(response => response.json().then(json => response.ok ? json : Promise.reject(json))).then(json => {
+      return fetch(url, options).then(response => {
+        if (!response.ok) return Promise.reject(json);
+        return response.json().then(json => {
+          this.after(type, options, data, response ? response.ok : false, response, json, query);
+          return json;
+        });
+      }).then(json => {
         delete this._model[type][id];
         return json;
       }).then(() => this.pagingReset(type).catch(_ => {})).catch(error => {
@@ -1245,6 +1272,7 @@ var ActionUI = function (exports) {
       model.loading(isLoading);
     }
     before(type, fetch, data) {
+      let query = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : null;
       let _name = this.options.baseUrl + '/' + type;
       let view = null;
       this.loading(type, true);
@@ -1253,11 +1281,12 @@ var ActionUI = function (exports) {
       }
       if (this.options.verbose) console.info('Store.before()', _name, {
         store: this,
-        type: type,
-        fetch: fetch,
-        data: data,
-        view: view,
-        model: this.model(type)
+        type,
+        fetch,
+        data,
+        view,
+        model: this.model(type),
+        query
       });
       if (view) {
         document.querySelectorAll('[ui-view="' + view.name + '"]').forEach(_target => {
@@ -1271,11 +1300,13 @@ var ActionUI = function (exports) {
         store: this,
         data: data,
         model: this.model(type),
-        view: view
+        view: view,
+        query: query
       });
       return document.dispatchEvent(eventBefore);
     }
-    after(type, fetch, data, success, response) {
+    after(type, fetch, data, success, response, json) {
+      let query = arguments.length > 6 && arguments[6] !== undefined ? arguments[6] : null;
       let _name = this.options.baseUrl + '/' + type;
       let view = null;
       this.loading(type, false);
@@ -1284,13 +1315,15 @@ var ActionUI = function (exports) {
       }
       if (this.options.verbose) console.info('Store.after()', _name, {
         store: this,
-        type: type,
-        fetch: fetch,
-        data: data,
-        view: view,
+        type,
+        fetch,
+        data,
+        view,
         model: this.model(type),
-        success: success,
-        response: response
+        success,
+        response,
+        json,
+        query
       });
       if (view) {
         document.querySelectorAll('[ui-view="' + view.name + '"]').forEach(_target => {
@@ -1306,7 +1339,9 @@ var ActionUI = function (exports) {
         data: data,
         model: this.model(type),
         view: view,
-        response: response
+        response: response,
+        json: json,
+        query: query
       });
       return document.dispatchEvent(eventAfter);
     }
