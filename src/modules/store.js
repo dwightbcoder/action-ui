@@ -50,8 +50,8 @@ class Store
 				'patch': this.actionHandler,
 				'delete': this.actionHandler
 			},
-			eventBefore: new CustomEvent('store.before', { bubbles: true, cancelable: true, detail: { type: 'before', name: null, fetch: null, data: null, model: null, view: null, query: null } }),
-			eventAfter: new CustomEvent('store.after', { bubbles: true, detail: { type: 'after', name: null, fetch: null, data: null, model: null, view: null, success: null, response: null, json: null, query: null } })
+			eventBefore: new CustomEvent('store.before', { bubbles: true, cancelable: true, detail: { type: 'before', name: null, fetch: null, type: null, data: null, model: null, view: null, query: null } }),
+			eventAfter: new CustomEvent('store.after', { bubbles: true, detail: { type: 'after', name: null, fetch: null, type: null, data: null, model: null, view: null, success: null, response: null, json: null, query: null } })
 		}
 		Util.deepAssign(this.options, options || {})
 
@@ -409,17 +409,23 @@ class Store
 			id = query.id
 		}
 
-		let url = this.url(Object.assign({}, query, { type: type, id: id }))
+		let data = { type: type, id: id }
+		let options = {}
+		Util.deepCopy(options, this.options.fetch)
+		this.before(type, options, data)
+		let url = this.url(Object.assign({}, query, data))
 
 		if (this.options.verbose)
-			console.info('Store.fetch()', type, id, { type: type, id: id, query: query, store: this, url: url, options: this.options.fetch })
+			console.info('Store.fetch()', type, id, { type: data.type, id: data.id, query, store: this, url, options })
 
-		return this.fetchUrl(url, type, query)
+		return this.fetchUrl(url, data.type, query, options, true)
 	}
 
-	async fetchUrl(url, type, eventData = {})
+	async fetchUrl(url, type, eventData = {}, fetchOptions = null, skipOnBefore = false)
 	{
 		if (!url) return Promise.reject()
+		if (fetchOptions == null)
+			Util.deepCopy(fetchOptions, this.options.fetch)
 
 		try
 		{
@@ -436,8 +442,9 @@ class Store
 				return Promise.resolve(cached.model)
 			}
 
-			this.before(type, this.options.fetch, eventData)
-			const response = await fetch(url, this.options.fetch)
+			if (!skipOnBefore)
+				this.before(type, fetchOptions, eventData)
+			const response = await fetch(url, fetchOptions)
 			let json = response.ok == true ? await response.json() : {}
 			this.after(type, this.options.fetch, eventData, (response ? response.ok : false), response, json)
 
@@ -625,11 +632,11 @@ class Store
 		return fetch(url, options)
 			.then(response =>
 			{
-				if (!response.ok)
-					return Promise.reject(json)
-
 				return response.json().then(json =>
 				{
+					if (!response.ok)
+						return Promise.reject(json)
+
 					this.after(type, options, data, (response ? response.ok : false), response, json, query)
 					return json
 				})
@@ -659,11 +666,11 @@ class Store
 		return fetch(url, options)
 			.then(response =>
 			{
-				if (!response.ok)
-					return Promise.reject(json)
-
 				return response.json().then(json =>
 				{
+					if (!response.ok)
+						return Promise.reject(json)
+
 					this.after(type, options, data, (response ? response.ok : false), response, json, query)
 					return json
 				})
@@ -693,16 +700,16 @@ class Store
 		return fetch(url, options)
 			.then(response =>
 			{
-				if (!response.ok)
-					return Promise.reject(json)
-
 				return response.json().then(json =>
 				{
+					if (!response.ok)
+						return Promise.reject(json)
+
 					this.after(type, options, data, (response ? response.ok : false), response, json, query)
 					return json
 				})
 			})
-			.then(json => { delete this._model[type][id]; return json })
+			.then(json => { delete this._model[type][id]; return this.sync(json, url) })
 			.then(() => this.pagingReset(type).catch(_ => { }))
 			.catch(error =>
 			{
@@ -728,7 +735,7 @@ class Store
 		model.loading(isLoading)
 	}
 
-	before(type, fetch, data, query = null)
+	before(type, fetch, data, query = {})
 	{
 		let _name = this.options.baseUrl + '/' + type
 		let view = null
@@ -757,6 +764,7 @@ class Store
 			name: _name,
 			fetch: fetch,
 			store: this,
+			type: type,
 			data: data,
 			model: this.model(type),
 			view: view,
@@ -766,7 +774,7 @@ class Store
 		return document.dispatchEvent(eventBefore)
 	}
 
-	after(type, fetch, data, success, response, json, query = null)
+	after(type, fetch, data, success, response, json, query = {})
 	{
 		let _name = this.options.baseUrl + '/' + type
 		let view = null
@@ -796,6 +804,7 @@ class Store
 			success: success,
 			fetch: fetch,
 			store: this,
+			type: type,
 			data: data,
 			model: this.model(type),
 			view: view,

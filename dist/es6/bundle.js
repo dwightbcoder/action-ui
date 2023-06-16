@@ -439,8 +439,8 @@ var ActionUI = (function (exports) {
 		{
 			if (_options.verbose) console.info('Action.before()', this.name, { action: this, target: target, data: data });
 
-			Action.setCssClass(target, _options.cssClass.loading);
-			Action.reflectCssClass(this.name, _options.cssClass.loading);
+			Action.setCssClass(target, _options.cssClass.loading, data);
+			Action.reflectCssClass(this.name, _options.cssClass.loading, data);
 
 			let eventBefore = new CustomEvent(_options.eventBefore.type, _options.eventBefore);
 
@@ -461,8 +461,8 @@ var ActionUI = (function (exports) {
 			var canceled = (result instanceof ActionErrorCanceled);
 			var cssClass = success ? _options.cssClass.success : _options.cssClass.fail;
 			if (canceled) cssClass = _options.cssClass.canceled;
-			Action.setCssClass(target, cssClass);
-			Action.reflectCssClass(this.name, cssClass);
+			Action.setCssClass(target, cssClass, data);
+			Action.reflectCssClass(this.name, cssClass, data);
 
 			if (result != undefined && !(result instanceof Error))
 			{
@@ -619,17 +619,32 @@ var ActionUI = (function (exports) {
 			return _cache[name]
 		}
 
-		static setCssClass(target, cssClass)
+		static setCssClass(target, cssClass, data = null)
 		{
+			if (!!target.attributes['ui-nostate'])
+				return
+			if (data != null && !!target.attributes['ui-state-data'])
+			{
+				let match = true;
+				let requiredDataValues = JSON.parse(target.attributes['ui-state-data'].value);
+				for (let i in requiredDataValues)
+				{
+					match = data[i] == requiredDataValues[i];
+					if (match === false)
+						break
+				}
+				if (match === false)
+					return
+			}
 			for (var i in _options.cssClass) target.classList.remove(_options.cssClass[i]);
 			target.classList.add(cssClass);
 		}
 
 		// Propagate class to all reflectors (ui-state and form submit buttons)
-		static reflectCssClass(name, cssClass)
+		static reflectCssClass(name, cssClass, data = null)
 		{
 			document.querySelectorAll('form[ui-action="' + name + '"] [type="submit"], form[ui-action="' + name + '"] button:not([type]), [ui-state="' + name + '"]')
-				.forEach((el) => Action.setCssClass(el, cssClass));
+				.forEach((el) => Action.setCssClass(el, cssClass, data));
 		}
 
 		static get options() { return _options }
@@ -851,8 +866,8 @@ var ActionUI = (function (exports) {
 					'patch': this.actionHandler,
 					'delete': this.actionHandler
 				},
-				eventBefore: new CustomEvent('store.before', { bubbles: true, cancelable: true, detail: { type: 'before', name: null, fetch: null, data: null, model: null, view: null, query: null } }),
-				eventAfter: new CustomEvent('store.after', { bubbles: true, detail: { type: 'after', name: null, fetch: null, data: null, model: null, view: null, success: null, response: null, json: null, query: null } })
+				eventBefore: new CustomEvent('store.before', { bubbles: true, cancelable: true, detail: { type: 'before', name: null, fetch: null, type: null, data: null, model: null, view: null, query: null } }),
+				eventAfter: new CustomEvent('store.after', { bubbles: true, detail: { type: 'after', name: null, fetch: null, type: null, data: null, model: null, view: null, success: null, response: null, json: null, query: null } })
 			};
 			deepAssign(this.options, options || {});
 
@@ -1210,17 +1225,23 @@ var ActionUI = (function (exports) {
 				id = query.id;
 			}
 
-			let url = this.url(Object.assign({}, query, { type: type, id: id }));
+			let data = { type: type, id: id };
+			let options = {};
+			deepCopy(options, this.options.fetch);
+			this.before(type, options, data);
+			let url = this.url(Object.assign({}, query, data));
 
 			if (this.options.verbose)
-				console.info('Store.fetch()', type, id, { type: type, id: id, query: query, store: this, url: url, options: this.options.fetch });
+				console.info('Store.fetch()', type, id, { type: data.type, id: data.id, query, store: this, url, options });
 
-			return this.fetchUrl(url, type, query)
+			return this.fetchUrl(url, data.type, query, options, true)
 		}
 
-		async fetchUrl(url, type, eventData = {})
+		async fetchUrl(url, type, eventData = {}, fetchOptions = null, skipOnBefore = false)
 		{
 			if (!url) return Promise.reject()
+			if (fetchOptions == null)
+				deepCopy(fetchOptions, this.options.fetch);
 
 			try
 			{
@@ -1237,8 +1258,9 @@ var ActionUI = (function (exports) {
 					return Promise.resolve(cached.model)
 				}
 
-				this.before(type, this.options.fetch, eventData);
-				const response = await fetch(url, this.options.fetch);
+				if (!skipOnBefore)
+					this.before(type, fetchOptions, eventData);
+				const response = await fetch(url, fetchOptions);
 				let json = response.ok == true ? await response.json() : {};
 				this.after(type, this.options.fetch, eventData, (response ? response.ok : false), response, json);
 
@@ -1426,11 +1448,11 @@ var ActionUI = (function (exports) {
 			return fetch(url, options)
 				.then(response =>
 				{
-					if (!response.ok)
-						return Promise.reject(json)
-
 					return response.json().then(json =>
 					{
+						if (!response.ok)
+							return Promise.reject(json)
+
 						this.after(type, options, data, (response ? response.ok : false), response, json, query);
 						return json
 					})
@@ -1460,11 +1482,11 @@ var ActionUI = (function (exports) {
 			return fetch(url, options)
 				.then(response =>
 				{
-					if (!response.ok)
-						return Promise.reject(json)
-
 					return response.json().then(json =>
 					{
+						if (!response.ok)
+							return Promise.reject(json)
+
 						this.after(type, options, data, (response ? response.ok : false), response, json, query);
 						return json
 					})
@@ -1494,16 +1516,16 @@ var ActionUI = (function (exports) {
 			return fetch(url, options)
 				.then(response =>
 				{
-					if (!response.ok)
-						return Promise.reject(json)
-
 					return response.json().then(json =>
 					{
+						if (!response.ok)
+							return Promise.reject(json)
+
 						this.after(type, options, data, (response ? response.ok : false), response, json, query);
 						return json
 					})
 				})
-				.then(json => { delete this._model[type][id]; return json })
+				.then(json => { delete this._model[type][id]; return this.sync(json, url) })
 				.then(() => this.pagingReset(type).catch(_ => { }))
 				.catch(error =>
 				{
@@ -1529,7 +1551,7 @@ var ActionUI = (function (exports) {
 			model.loading(isLoading);
 		}
 
-		before(type, fetch, data, query = null)
+		before(type, fetch, data, query = {})
 		{
 			let _name = this.options.baseUrl + '/' + type;
 			let view = null;
@@ -1558,6 +1580,7 @@ var ActionUI = (function (exports) {
 				name: _name,
 				fetch: fetch,
 				store: this,
+				type: type,
 				data: data,
 				model: this.model(type),
 				view: view,
@@ -1567,7 +1590,7 @@ var ActionUI = (function (exports) {
 			return document.dispatchEvent(eventBefore)
 		}
 
-		after(type, fetch, data, success, response, json, query = null)
+		after(type, fetch, data, success, response, json, query = {})
 		{
 			let _name = this.options.baseUrl + '/' + type;
 			let view = null;
@@ -1597,6 +1620,7 @@ var ActionUI = (function (exports) {
 				success: success,
 				fetch: fetch,
 				store: this,
+				type: type,
 				data: data,
 				model: this.model(type),
 				view: view,

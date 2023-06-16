@@ -106,8 +106,8 @@ class Action
 	{
 		if (_options.verbose) console.info('Action.before()', this.name, { action: this, target: target, data: data })
 
-		Action.setCssClass(target, _options.cssClass.loading)
-		Action.reflectCssClass(this.name, _options.cssClass.loading)
+		Action.setCssClass(target, _options.cssClass.loading, data)
+		Action.reflectCssClass(this.name, _options.cssClass.loading, data)
 
 		let eventBefore = new CustomEvent(_options.eventBefore.type, _options.eventBefore)
 
@@ -128,8 +128,8 @@ class Action
 		var canceled = (result instanceof ActionErrorCanceled)
 		var cssClass = success ? _options.cssClass.success : _options.cssClass.fail
 		if (canceled) cssClass = _options.cssClass.canceled
-		Action.setCssClass(target, cssClass)
-		Action.reflectCssClass(this.name, cssClass)
+		Action.setCssClass(target, cssClass, data)
+		Action.reflectCssClass(this.name, cssClass, data)
 
 		if (result != undefined && !(result instanceof Error))
 		{
@@ -286,17 +286,32 @@ class Action
 		return _cache[name]
 	}
 
-	static setCssClass(target, cssClass)
+	static setCssClass(target, cssClass, data = null)
 	{
+		if (!!target.attributes['ui-nostate'])
+			return
+		if (data != null && !!target.attributes['ui-state-data'])
+		{
+			let match = true
+			let requiredDataValues = JSON.parse(target.attributes['ui-state-data'].value)
+			for (let i in requiredDataValues)
+			{
+				match = data[i] == requiredDataValues[i]
+				if (match === false)
+					break
+			}
+			if (match === false)
+				return
+		}
 		for (var i in _options.cssClass) target.classList.remove(_options.cssClass[i])
 		target.classList.add(cssClass)
 	}
 
 	// Propagate class to all reflectors (ui-state and form submit buttons)
-	static reflectCssClass(name, cssClass)
+	static reflectCssClass(name, cssClass, data = null)
 	{
 		document.querySelectorAll('form[ui-action="' + name + '"] [type="submit"], form[ui-action="' + name + '"] button:not([type]), [ui-state="' + name + '"]')
-			.forEach((el) => Action.setCssClass(el, cssClass))
+			.forEach((el) => Action.setCssClass(el, cssClass, data))
 	}
 
 	static get options() { return _options }
