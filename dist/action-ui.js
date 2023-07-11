@@ -1029,7 +1029,7 @@ var ActionUI = function (exports) {
       };
       let options = {};
       deepCopy(options, this.options.fetch);
-      this.before(type, options, data);
+      this.before(type, options, data, query);
       let url = this.url(Object.assign({}, query, data));
       if (this.options.verbose) console.info('Store.fetch()', type, id, {
         type: data.type,

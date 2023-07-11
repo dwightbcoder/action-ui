@@ -1228,7 +1228,7 @@ var ActionUI = (function (exports) {
 			let data = { type: type, id: id };
 			let options = {};
 			deepCopy(options, this.options.fetch);
-			this.before(type, options, data);
+			this.before(type, options, data, query);
 			let url = this.url(Object.assign({}, query, data));
 
 			if (this.options.verbose)
