@@ -42,7 +42,11 @@ class View
     // When the model updates
     update(changes)
     {
-        if ( this.constructor.options.verbose ) console.info( this.constructor.name + '.update()', this.name, {view:this, changes:changes} )
+		if (this.constructor.options.verbose)
+			console.info(this.constructor.name + '.update()', this.name, { view: this, changes: changes })
+
+		if (Object.keys(changes).length == 0)
+			return
 
         this.render()
     }

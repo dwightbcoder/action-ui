@@ -1598,6 +1598,7 @@ var ActionUI = function (exports) {
         view: this,
         changes: changes
       });
+      if (Object.keys(changes).length == 0) return;
       this.render();
     }
 
