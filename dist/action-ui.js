@@ -8,8 +8,7 @@ var ActionUI = function (exports) {
    */
 
   // Recursively copy source properties to target (Warning: Classes are treated as Objects)
-  function deepAssign(target, source) {
-    let dereference = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
+  function deepAssign(target, source, dereference = false) {
     if (dereference) {
       source = Object.assign(Array.isArray(source) ? [] : {}, source);
     }
@@ -61,8 +60,7 @@ var ActionUI = function (exports) {
     }
     return firstMatchingParentElement(element.parentElement, selector);
   }
-  function formToObject(form) {
-    let data = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+  function formToObject(form, data = {}) {
     data = Object.assign(Object.fromEntries(new FormData(form)), data);
     Object.entries(data).map(entry => {
       const keys = entry[0].split('[').map(key => key.replace(/]/g, ''));
@@ -106,9 +104,7 @@ var ActionUI = function (exports) {
    */
 
   class Model {
-    constructor() {
-      let data = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
-      let parent = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : null;
+    constructor(data = {}, parent = null) {
       let proxy = null;
       try {
         proxy = new Proxy(this, {
@@ -190,8 +186,7 @@ var ActionUI = function (exports) {
     }
 
     // Trigger all watcher callbacks
-    _trigger() {
-      let force = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : false;
+    _trigger(force = false) {
       window.clearTimeout(this._timer);
       this._timer = null;
       if (force || Object.keys(this._changes).length > 0) {
@@ -273,8 +268,7 @@ var ActionUI = function (exports) {
     }
 
     // trigger before event and run the handler as a promise 
-    run(target) {
-      let data = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+    run(target, data = {}) {
       if (_options.verbose) console.info('Action.run()', this.name, {
         action: this,
         target: target,
@@ -425,8 +419,7 @@ var ActionUI = function (exports) {
         }
       });
     }
-    static create(options) {
-      let fromCache = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : true;
+    static create(options, fromCache = true) {
       if (_options.verbose) console.info(this.name + ':create()', {
         options,
         fromCache
@@ -441,8 +434,7 @@ var ActionUI = function (exports) {
       }
       return fromCache ? this.cache(options.name) || new this(options.name, options.handler, options.model) : new this(options.name, options.handler, options.model);
     }
-    static createFromElement(element) {
-      let options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+    static createFromElement(element, options = {}) {
       return Action.create(Object.assign({
         name: element.getAttribute('ui-action') || null,
         url: element.action || element.href || options.href || null,
@@ -471,8 +463,7 @@ var ActionUI = function (exports) {
     static get(name) {
       return _cache[name];
     }
-    static setCssClass(target, cssClass) {
-      let data = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : null;
+    static setCssClass(target, cssClass, data = null) {
       if (!!target.attributes['ui-nostate']) return;
       if (data != null && !!target.attributes['ui-state-data']) {
         let match = true;
@@ -488,8 +479,7 @@ var ActionUI = function (exports) {
     }
 
     // Propagate class to all reflectors (ui-state and form submit buttons)
-    static reflectCssClass(name, cssClass) {
-      let data = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : null;
+    static reflectCssClass(name, cssClass, data = null) {
       document.querySelectorAll('form[ui-action="' + name + '"] [type="submit"], form[ui-action="' + name + '"] button:not([type]), [ui-state="' + name + '"]').forEach(el => Action.setCssClass(el, cssClass, data));
     }
     static get options() {
@@ -614,9 +604,7 @@ var ActionUI = function (exports) {
       }
       return fetch(this.baseUrl + '/' + type + (id ? '/' + id : '')).then(response => response.json()).then(json => this.sync(json));
     }
-    page(type) {
-      let page = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 1;
-      let size = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
+    page(type, page = 1, size = 0) {
       size = parseInt(size) || 0;
       page = parseInt(page) || 1;
       if (type in this._paging && size in this._paging[type] && page in this._paging[type][size]) {
@@ -655,7 +643,7 @@ var ActionUI = function (exports) {
 
   /**
    * Store
-   * @version 20230126
+   * @version 20230731
    * @description Remote data store
    * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
    */
@@ -760,8 +748,7 @@ var ActionUI = function (exports) {
     model(type, id) {
       return id ? this._model[type][id] : this._model[type];
     }
-    modelCreate(type) {
-      let id = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : null;
+    modelCreate(type, id = null) {
       if (!('string' == typeof type)) throw new Error('Store: Cannot create model without `type`');
       if (!this._model[type]) {
         this._model[type] = new Model({
@@ -842,8 +829,7 @@ var ActionUI = function (exports) {
     id(json) {
       return json[this.options.keys.id];
     }
-    sync(json, url) {
-      let skipPaging = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
+    sync(json, url, skipPaging = false) {
       let data = this.data(json);
       if (!data || Object.keys(data).length == 0) {
         if (!skipPaging) this.syncPaging(json, url);
@@ -1001,8 +987,7 @@ var ActionUI = function (exports) {
       }
       return results;
     }
-    propertyValueExists(data, property, value) {
-      let searchDepth = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : 1;
+    propertyValueExists(data, property, value, searchDepth = 1) {
       var keys = Object.keys(data);
       if (keys.indexOf(property) > -1) return data[property] == value;
       if (searchDepth <= 1) return false;
@@ -1012,8 +997,7 @@ var ActionUI = function (exports) {
         }
       }
     }
-    async fetch(type, id) {
-      let query = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
+    async fetch(type, id, query = {}) {
       type = this.type({
         type: type
       });
@@ -1041,10 +1025,7 @@ var ActionUI = function (exports) {
       });
       return this.fetchUrl(url, data.type, query, options, true);
     }
-    async fetchUrl(url, type) {
-      let eventData = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
-      let fetchOptions = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : null;
-      let skipOnBefore = arguments.length > 4 && arguments[4] !== undefined ? arguments[4] : false;
+    async fetchUrl(url, type, eventData = {}, fetchOptions = null, skipOnBefore = false) {
       if (!url) return Promise.reject();
       if (fetchOptions == null) deepCopy(fetchOptions, this.options.fetch);
       try {
@@ -1055,6 +1036,8 @@ var ActionUI = function (exports) {
         type = eventData.type || (cached ? cached.type : null) || parsedUrl.type || null;
         if (cached) {
           this.pageChange(cached.type, cached.pageNumber, cached.pageSize, cached.pageData.query);
+          eventData.cached = true;
+          this.after(cached.type, null, eventData, true, null, null, cached.pageData.query);
           return Promise.resolve(cached.model);
         }
         if (!skipOnBefore) this.before(type, fetchOptions, eventData);
@@ -1078,9 +1061,7 @@ var ActionUI = function (exports) {
         return await Promise.reject(error);
       }
     }
-    urlCache(url) {
-      let model = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : null;
-      let json = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : null;
+    urlCache(url, model = null, json = null) {
       if (!this.options.useUrlCache) return false;
       url = decodeURIComponent(url);
       if (!model && !json) {
@@ -1099,8 +1080,7 @@ var ActionUI = function (exports) {
         pageSize: pageData ? pageData.pageSize : false
       };
     }
-    urlCacheClear(type) {
-      let pagingOnly = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : false;
+    urlCacheClear(type, pagingOnly = false) {
       if (!type) {
         this._urlCache = {};
         return;
@@ -1155,10 +1135,7 @@ var ActionUI = function (exports) {
       }
       return pageNumber && pageSize ? this.page(type, pageNumber, pageSize, pageQuery) : Promise.resolve();
     }
-    async page(type) {
-      let pageNumber = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 1;
-      let pageSize = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
-      let query = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : {};
+    async page(type, pageNumber = 1, pageSize = 0, query = {}) {
       query = query || {};
       pageSize = parseInt(pageSize) || this.options.defaultPageSize;
       pageNumber = parseInt(pageNumber) || 1;
@@ -1167,8 +1144,7 @@ var ActionUI = function (exports) {
       query[this.options.query['page[size]']] = pageSize;
       return await this.fetch(type, 0, query);
     }
-    pageChange(type, pageNumber, pageSize) {
-      let query = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : {};
+    pageChange(type, pageNumber, pageSize, query = {}) {
       let pageKey = this.pageKey(pageSize, query);
       if (!type || !pageKey || !pageNumber || !pageSize || !this._model[type]._paging || !this._model[type]._paging[pageKey][pageNumber]) return false;
       this._model[type]._paging.pageNumber = pageNumber;
@@ -1178,16 +1154,14 @@ var ActionUI = function (exports) {
       this._model[type]._paging.current = this._model[type]._paging[pageKey][pageNumber];
       return this._model[type]._paging;
     }
-    pageKey(pageSize) {
-      let query = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+    pageKey(pageSize, query = {}) {
       query[this.options.query['page[size]']] = pageSize;
       delete query[this.options.query['page[number]']];
       let searchParams = new URLSearchParams(query);
       searchParams.sort();
       return searchParams.toString();
     }
-    post(type, data) {
-      let query = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
+    post(type, data, query = {}) {
       type = type || this.type(data);
       let options = {};
       deepCopy(options, this.options.fetch);
@@ -1217,8 +1191,7 @@ var ActionUI = function (exports) {
         return Promise.reject(error);
       });
     }
-    patch(type, data) {
-      let query = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
+    patch(type, data, query = {}) {
       type = type || this.type(data);
       let options = {};
       deepCopy(options, this.options.fetch);
@@ -1248,8 +1221,7 @@ var ActionUI = function (exports) {
         return Promise.reject(error);
       });
     }
-    delete(type, id) {
-      let query = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
+    delete(type, id, query = {}) {
       let data = {};
       data[this.options.keys.id] = id;
       let options = {};
@@ -1292,8 +1264,7 @@ var ActionUI = function (exports) {
       }
       model.loading(isLoading);
     }
-    before(type, fetch, data) {
-      let query = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : {};
+    before(type, fetch, data, query = {}) {
       let _name = this.options.baseUrl + '/' + type;
       let view = null;
       this.loading(type, true);
@@ -1327,8 +1298,7 @@ var ActionUI = function (exports) {
       });
       return document.dispatchEvent(eventBefore);
     }
-    after(type, fetch, data, success, response, json) {
-      let query = arguments.length > 6 && arguments[6] !== undefined ? arguments[6] : {};
+    after(type, fetch, data, success, response, json, query = {}) {
       let _name = this.options.baseUrl + '/' + type;
       let view = null;
       this.loading(type, false);
@@ -1416,8 +1386,7 @@ var ActionUI = function (exports) {
       super(_options);
       this._mapRelationships = {};
     }
-    sync(json, url) {
-      let skipPaging = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
+    sync(json, url, skipPaging = false) {
       if (json[this.options.keys.included]) {
         let _json = {
           [this.options.keys.data]: json[this.options.keys.included]
@@ -1549,8 +1518,7 @@ var ActionUI = function (exports) {
       deepAssign(_options, options || {});
       super(_options);
     }
-    fetch(type, id) {
-      let query = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
+    fetch(type, id, query = {}) {
       if (typeof id == 'string') {
         query.slug = id;
         id = undefined;
@@ -1660,8 +1628,7 @@ var ActionUI = function (exports) {
     // #region Static methods
 
     // View factory
-    static create(options) {
-      let fromCache = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : true;
+    static create(options, fromCache = true) {
       if (this.options.verbose) console.info(this.name + ':create()', {
         options,
         fromCache
@@ -1819,8 +1786,7 @@ var ActionUI = function (exports) {
     // #region Static methods
 
     // View factory
-    static create(options) {
-      let fromCache = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : true;
+    static create(options, fromCache = true) {
       if (this.options.verbose) console.info(this.name + ':create()', {
         options,
         fromCache
@@ -1919,16 +1885,14 @@ var ActionUI = function (exports) {
       }
       this.navigate(location.pathname);
     }
-    static route(route, callback) {
-      let priority = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
+    static route(route, callback, priority = 0) {
       this.options.routes[route] = {
         route: route,
         callback: callback,
         priority: priority
       };
     }
-    static match(route) {
-      let follow = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : true;
+    static match(route, follow = true) {
       // Exact match
       if (this.options.routes[route]) {
         if (follow && typeof this.options.routes[route].callback == "string") {
@@ -1949,9 +1913,7 @@ var ActionUI = function (exports) {
       }
       return _match;
     }
-    static navigate(route) {
-      let data = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
-      let event = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : null;
+    static navigate(route, data = {}, event = null) {
       if (_options$4.verbose) console.info('Router.navigate()', {
         router: this,
         route: route,
@@ -2099,8 +2061,7 @@ var ActionUI = function (exports) {
       });
       return capitalize(camelCase(name)) + 'Controller';
     }
-    static pushState(route) {
-      let data = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+    static pushState(route, data = {}) {
       if (location.pathname != route) {
         data.route = route;
         deepAssign(this.state, data);

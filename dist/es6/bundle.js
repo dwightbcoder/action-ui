@@ -820,7 +820,7 @@ var ActionUI = (function (exports) {
 
 	/**
 	 * Store
-	 * @version 20230126
+	 * @version 20230731
 	 * @description Remote data store
 	 * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
 	 */
@@ -1255,6 +1255,8 @@ var ActionUI = (function (exports) {
 				if (cached)
 				{
 					this.pageChange(cached.type, cached.pageNumber, cached.pageSize, cached.pageData.query);
+					eventData.cached = true;
+					this.after(cached.type, null, eventData, true, null, null, cached.pageData.query);
 					return Promise.resolve(cached.model)
 				}
 
