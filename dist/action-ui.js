@@ -1044,7 +1044,7 @@ var ActionUI = function (exports) {
         }
         if (!skipOnBefore) this.before(type, fetchOptions, eventData);
         const response = await fetch(url, fetchOptions);
-        let json = response.ok == true ? await response.json() : {};
+        let json = await response.json();
         this.after(type, this.options.fetch, eventData, response ? response.ok : false, response, json);
         if (!response.ok) {
           if (type && this.options.triggerChangesOnError && this._model[type]) this.model(type).triggerChanges();
