@@ -493,8 +493,9 @@ var ActionUI = (function (exports) {
 			document.addEventListener('click', e =>
 			{
 				let target = firstMatchingParentElement(e.target, '[ui-action]');
+				let disabled = target.disabled || e.target.disabled || target.hasAttribute('disabled') || e.target.hasAttribute('disabled');
 
-				if (target && target.tagName != 'FORM' && !target.disabled && !e.target.disabled)
+				if (target && target.tagName != 'FORM' && !disabled)
 				{
 					if (!(target.tagName == 'INPUT' && (target.type == 'checkbox' || target.type == 'radio')))
 						e.preventDefault();
@@ -525,7 +526,7 @@ var ActionUI = (function (exports) {
 			// Form submission
 			document.addEventListener('submit', e =>
 			{
-				if (e.target.matches('form[ui-action]') && !e.target.disabled)
+				if (e.target.matches('form[ui-action]') && !e.target.disabled && !e.target.hasAttribute('disabled'))
 				{
 					e.preventDefault();
 					var actionName = e.target.getAttribute('ui-action');
