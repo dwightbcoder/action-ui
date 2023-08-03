@@ -711,7 +711,7 @@ class Store
 					return json
 				})
 			})
-			.then(json => { delete this._model[type][id]; return this.sync(json, url) })
+			.then(json => { delete this._model[type][id]; return json })
 			.then(() => this.pagingReset(type).catch(_ => { }))
 			.catch(error =>
 			{

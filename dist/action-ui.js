@@ -376,10 +376,8 @@ var ActionUI = function (exports) {
     static init() {
       // General elements
       document.addEventListener('click', e => {
-        let target = firstMatchingParentElement(e.target, '[ui-action]');
-        let disabled = e.target.disabled || e.target.hasAttribute('disabled');
-        if (target) disabled = disabled || target.disabled || target.hasAttribute('disabled');
-        if (target && target.tagName != 'FORM' && !disabled) {
+        let target = e.target.closest('[ui-action]');
+        if (target && target.tagName != 'FORM' && !e.target.disabled && !e.target.closest('[disabled]')) {
           if (!(target.tagName == 'INPUT' && (target.type == 'checkbox' || target.type == 'radio'))) e.preventDefault();
           var actionName = target.getAttribute('ui-action');
 
@@ -401,7 +399,7 @@ var ActionUI = function (exports) {
 
       // Form submission
       document.addEventListener('submit', e => {
-        if (e.target.matches('form[ui-action]') && !e.target.disabled && !e.target.hasAttribute('disabled')) {
+        if (e.target.matches('form[ui-action]') && !e.target.disabled && !e.target.closest('[disabled]')) {
           e.preventDefault();
           var actionName = e.target.getAttribute('ui-action');
 
@@ -1250,7 +1248,7 @@ var ActionUI = function (exports) {
         });
       }).then(json => {
         delete this._model[type][id];
-        return this.sync(json, url);
+        return json;
       }).then(() => this.pagingReset(type).catch(_ => {})).catch(error => {
         if (this.options.triggerChangesOnError) this.model(type).triggerChanges();
         return Promise.reject(error);
