@@ -820,7 +820,7 @@ var ActionUI = (function (exports) {
 
 	/**
 	 * Store
-	 * @version 20230731
+	 * @version 20230808
 	 * @description Remote data store
 	 * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
 	 */
@@ -1004,7 +1004,7 @@ var ActionUI = (function (exports) {
 			if (!data || Object.keys(data).length == 0)
 			{
 				if (!skipPaging) this.syncPaging(json, url);
-				throw new Error('Store: No data to sync')
+				throw new StoreErrorDataEmpty('Store: No data to sync')
 			}
 
 			if (data instanceof Array)
@@ -1267,29 +1267,16 @@ var ActionUI = (function (exports) {
 				this.after(type, this.options.fetch, eventData, (response ? response.ok : false), response, json);
 
 				if (!response.ok)
-				{
-					if (type && this.options.triggerChangesOnError && this._model[type])
-						this.model(type).triggerChanges();
-					return Promise.reject(json)
-				}
+				return Promise.reject(json)
 
-				try
-				{
-					let model = this.sync(json, url);
-					this.urlCache(parsedUrl, model, json);
-					return model
-				}
-				catch (error)
-				{
-					if (type && this.options.triggerChangesOnError && this._model[type])
-						this.model(type).triggerChanges();
-					return Promise.reject(json)
-				}
+				let model = this.sync(json, url);
+				this.urlCache(parsedUrl, model, json);
+				return model
 			}
 			catch (error)
 			{
 				if (type && this.options.triggerChangesOnError && this._model[type])
-					this.model(type).triggerChanges();
+					this.model(type).triggerChanges({ __error: error });
 				return await Promise.reject(error)
 			}
 		}
@@ -1432,7 +1419,7 @@ var ActionUI = (function (exports) {
 			return searchParams.toString()
 		}
 
-		post(type, data, query = {})
+		async post(type, data, query = {})
 		{
 			type = type || this.type(data);
 			let options = {};
@@ -1447,27 +1434,25 @@ var ActionUI = (function (exports) {
 			if (this.options.verbose)
 				console.info('Store.post()', type, { type: type, data: data, query: query, store: this, url: url, options: options });
 
-			return fetch(url, options)
-				.then(response =>
-				{
-					return response.json().then(json =>
-					{
-						if (!response.ok)
-							return Promise.reject(json)
+			try
+			{
+				const response = await fetch(url, options);
+				let json = await response.json();
+				this.after(type, options, data, (response ? response.ok : false), response, json, query);
 
-						this.after(type, options, data, (response ? response.ok : false), response, json, query);
-						return json
-					})
-				})
-				.then(json => this.sync(json, url))
-				.catch(error =>
-				{
-					if (this.options.triggerChangesOnError) this.model(type).triggerChanges();
-					return Promise.reject(error)
-				})
+				if (!response.ok)
+					return Promise.reject(json)
+
+				return this.sync(json, url)
+			}
+			catch (error)
+			{
+				if (this.options.triggerChangesOnError) this.model(type).triggerChanges({ __error: error });
+				return Promise.reject(error)
+			}
 		}
 
-		patch(type, data, query = {})
+		async patch(type, data, query = {})
 		{
 			type = type || this.type(data);
 			let options = {};
@@ -1480,28 +1465,26 @@ var ActionUI = (function (exports) {
 
 			if (this.options.verbose)
 				console.info('Store.patch()', type, { type: type, data: data, query: query, store: this, url: url, options: options });
+			
+			try
+			{
+				const response = await fetch(url, options);
+				let json = await response.json();
+				this.after(type, options, data, (response ? response.ok : false), response, json, query);
 
-			return fetch(url, options)
-				.then(response =>
-				{
-					return response.json().then(json =>
-					{
-						if (!response.ok)
-							return Promise.reject(json)
+				if (!response.ok)
+					return Promise.reject(json)
 
-						this.after(type, options, data, (response ? response.ok : false), response, json, query);
-						return json
-					})
-				})
-				.then(json => this.sync(json, url))
-				.catch(error =>
-				{
-					if (this.options.triggerChangesOnError) this.model(type).triggerChanges();
-					return Promise.reject(error)
-				})
+				return this.sync(json, url)
+			}
+			catch (error)
+			{
+				if (this.options.triggerChangesOnError) this.model(type).triggerChanges({ __error: error });
+				return Promise.reject(error)
+			}
 		}
 
-		delete(type, id, query = {})
+		async delete(type, id, query = {})
 		{
 			let data = {};
 			data[this.options.keys.id] = id;
@@ -1514,26 +1497,57 @@ var ActionUI = (function (exports) {
 
 			if (this.options.verbose)
 				console.info('Store.delete()', type, id, { type: type, id: data.id, query: query, store: this, url: url, options: options });
+			
+			try
+			{
+				const response = await fetch(url, options);
+				let json = await response.json();
+				this.after(type, options, data, (response ? response.ok : false), response, json, query);
 
-			return fetch(url, options)
-				.then(response =>
+				if (!response.ok)
+					return Promise.reject(json)
+
+				//#region Remove items sent back in response
+				let _data = this.data(json);
+				let _types = [type];
+				if (Array.isArray(_data))
 				{
-					return response.json().then(json =>
+					for (let i in _data)
 					{
-						if (!response.ok)
-							return Promise.reject(json)
-
-						this.after(type, options, data, (response ? response.ok : false), response, json, query);
-						return json
-					})
-				})
-				.then(json => { delete this._model[type][id]; return json })
-				.then(() => this.pagingReset(type).catch(_ => { }))
-				.catch(error =>
+						let _type = this.type(_data[i]);
+						let _id = this.id(_data[i]);
+						if (_type && _id && this._model[_type] && this._model[_type][_id])
+						{
+							if (_types.indexOf(_type) == -1)
+								_types.push(_type);
+							delete this._model[_type][_id];
+						}
+					}
+				}
+				else
 				{
-					if (this.options.triggerChangesOnError) this.model(type).triggerChanges();
-					return Promise.reject(error)
-				})
+					let _type = this.type(_data);
+					let _id = this.id(_data);
+					if (_type && _id && this._model[_type] && this._model[_type][_id])
+					{
+						if (_types.indexOf(_type) == -1)
+							_types.push(_type);
+						delete this._model[_type][_id];
+					}
+				}
+				//#endregion Remove items sent back in response
+				if (this._model[type][id])
+					delete this._model[type][id];
+
+				for (let _type of _types)
+					this.pagingReset(_type).catch(_ => { });
+				return json
+			}
+			catch (error)
+			{
+				if (this.options.triggerChangesOnError) this.model(type).triggerChanges({ __error: error });
+				return Promise.reject(error)
+			}
 		}
 
 		loading(type, isLoading)
@@ -1664,6 +1678,7 @@ var ActionUI = (function (exports) {
 			return this
 		}
 	}
+	class StoreErrorDataEmpty extends Error { }
 
 	let _cache$1 = {};
 
@@ -2608,6 +2623,7 @@ var ActionUI = (function (exports) {
 	exports.Model = Model;
 	exports.Router = Router;
 	exports.Store = Store;
+	exports.StoreErrorDataEmpty = StoreErrorDataEmpty;
 	exports.StoreJsonApi = StoreJsonApi;
 	exports.StoreWordpress = StoreWordpress;
 	exports.Util = util;

@@ -643,7 +643,7 @@ var ActionUI = function (exports) {
 
   /**
    * Store
-   * @version 20230731
+   * @version 20230808
    * @description Remote data store
    * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
    */
@@ -833,7 +833,7 @@ var ActionUI = function (exports) {
       let data = this.data(json);
       if (!data || Object.keys(data).length == 0) {
         if (!skipPaging) this.syncPaging(json, url);
-        throw new Error('Store: No data to sync');
+        throw new StoreErrorDataEmpty('Store: No data to sync');
       }
       if (data instanceof Array) {
         let _collection = {};
@@ -1044,20 +1044,14 @@ var ActionUI = function (exports) {
         const response = await fetch(url, fetchOptions);
         let json = await response.json();
         this.after(type, this.options.fetch, eventData, response ? response.ok : false, response, json);
-        if (!response.ok) {
-          if (type && this.options.triggerChangesOnError && this._model[type]) this.model(type).triggerChanges();
-          return Promise.reject(json);
-        }
-        try {
-          let model = this.sync(json, url);
-          this.urlCache(parsedUrl, model, json);
-          return model;
-        } catch (error) {
-          if (type && this.options.triggerChangesOnError && this._model[type]) this.model(type).triggerChanges();
-          return Promise.reject(json);
-        }
+        if (!response.ok) return Promise.reject(json);
+        let model = this.sync(json, url);
+        this.urlCache(parsedUrl, model, json);
+        return model;
       } catch (error) {
-        if (type && this.options.triggerChangesOnError && this._model[type]) this.model(type).triggerChanges();
+        if (type && this.options.triggerChangesOnError && this._model[type]) this.model(type).triggerChanges({
+          __error: error
+        });
         return await Promise.reject(error);
       }
     }
@@ -1161,7 +1155,7 @@ var ActionUI = function (exports) {
       searchParams.sort();
       return searchParams.toString();
     }
-    post(type, data, query = {}) {
+    async post(type, data, query = {}) {
       type = type || this.type(data);
       let options = {};
       deepCopy(options, this.options.fetch);
@@ -1180,18 +1174,20 @@ var ActionUI = function (exports) {
         url: url,
         options: options
       });
-      return fetch(url, options).then(response => {
-        return response.json().then(json => {
-          if (!response.ok) return Promise.reject(json);
-          this.after(type, options, data, response ? response.ok : false, response, json, query);
-          return json;
+      try {
+        const response = await fetch(url, options);
+        let json = await response.json();
+        this.after(type, options, data, response ? response.ok : false, response, json, query);
+        if (!response.ok) return Promise.reject(json);
+        return this.sync(json, url);
+      } catch (error) {
+        if (this.options.triggerChangesOnError) this.model(type).triggerChanges({
+          __error: error
         });
-      }).then(json => this.sync(json, url)).catch(error => {
-        if (this.options.triggerChangesOnError) this.model(type).triggerChanges();
         return Promise.reject(error);
-      });
+      }
     }
-    patch(type, data, query = {}) {
+    async patch(type, data, query = {}) {
       type = type || this.type(data);
       let options = {};
       deepCopy(options, this.options.fetch);
@@ -1210,18 +1206,20 @@ var ActionUI = function (exports) {
         url: url,
         options: options
       });
-      return fetch(url, options).then(response => {
-        return response.json().then(json => {
-          if (!response.ok) return Promise.reject(json);
-          this.after(type, options, data, response ? response.ok : false, response, json, query);
-          return json;
+      try {
+        const response = await fetch(url, options);
+        let json = await response.json();
+        this.after(type, options, data, response ? response.ok : false, response, json, query);
+        if (!response.ok) return Promise.reject(json);
+        return this.sync(json, url);
+      } catch (error) {
+        if (this.options.triggerChangesOnError) this.model(type).triggerChanges({
+          __error: error
         });
-      }).then(json => this.sync(json, url)).catch(error => {
-        if (this.options.triggerChangesOnError) this.model(type).triggerChanges();
         return Promise.reject(error);
-      });
+      }
     }
-    delete(type, id, query = {}) {
+    async delete(type, id, query = {}) {
       let data = {};
       data[this.options.keys.id] = id;
       let options = {};
@@ -1240,19 +1238,42 @@ var ActionUI = function (exports) {
         url: url,
         options: options
       });
-      return fetch(url, options).then(response => {
-        return response.json().then(json => {
-          if (!response.ok) return Promise.reject(json);
-          this.after(type, options, data, response ? response.ok : false, response, json, query);
-          return json;
-        });
-      }).then(json => {
-        delete this._model[type][id];
+      try {
+        const response = await fetch(url, options);
+        let json = await response.json();
+        this.after(type, options, data, response ? response.ok : false, response, json, query);
+        if (!response.ok) return Promise.reject(json);
+
+        //#region Remove items sent back in response
+        let _data = this.data(json);
+        let _types = [type];
+        if (Array.isArray(_data)) {
+          for (let i in _data) {
+            let _type = this.type(_data[i]);
+            let _id = this.id(_data[i]);
+            if (_type && _id && this._model[_type] && this._model[_type][_id]) {
+              if (_types.indexOf(_type) == -1) _types.push(_type);
+              delete this._model[_type][_id];
+            }
+          }
+        } else {
+          let _type = this.type(_data);
+          let _id = this.id(_data);
+          if (_type && _id && this._model[_type] && this._model[_type][_id]) {
+            if (_types.indexOf(_type) == -1) _types.push(_type);
+            delete this._model[_type][_id];
+          }
+        }
+        //#endregion Remove items sent back in response
+        if (this._model[type][id]) delete this._model[type][id];
+        for (let _type of _types) this.pagingReset(_type).catch(_ => {});
         return json;
-      }).then(() => this.pagingReset(type).catch(_ => {})).catch(error => {
-        if (this.options.triggerChangesOnError) this.model(type).triggerChanges();
+      } catch (error) {
+        if (this.options.triggerChangesOnError) this.model(type).triggerChanges({
+          __error: error
+        });
         return Promise.reject(error);
-      });
+      }
     }
     loading(type, isLoading) {
       if (!this._model[type]) {
@@ -1356,6 +1377,7 @@ var ActionUI = function (exports) {
       return this;
     }
   }
+  class StoreErrorDataEmpty extends Error {}
   let _cache$1 = {};
   class StoreJsonApi extends Store {
     constructor(options) {
@@ -2150,6 +2172,7 @@ var ActionUI = function (exports) {
   exports.Model = Model;
   exports.Router = Router;
   exports.Store = Store;
+  exports.StoreErrorDataEmpty = StoreErrorDataEmpty;
   exports.StoreJsonApi = StoreJsonApi;
   exports.StoreWordpress = StoreWordpress;
   exports.Util = util;
