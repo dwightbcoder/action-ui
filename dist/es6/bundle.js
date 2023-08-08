@@ -1625,7 +1625,10 @@ var ActionUI = (function (exports) {
 					.querySelectorAll('[ui-view="' + view.name + '"]')
 					.forEach((_target) =>
 					{
-						this.options.viewClass.setCssClass(_target, success ? this.options.viewClass.options.cssClass.success : this.options.viewClass.options.cssClass.fail);
+						if (fetch && fetch.method == 'GET')
+							this.options.viewClass.setCssClass(_target, success ? this.options.viewClass.options.cssClass.success : this.options.viewClass.options.cssClass.fail);
+						else
+							_target.classList.remove(this.options.viewClass.options.cssClass.loading);
 					});
 			}
 
