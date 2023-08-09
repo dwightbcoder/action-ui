@@ -117,7 +117,8 @@ class Action
 			model: this.model
 		})
 
-		return target.dispatchEvent(eventBefore)
+		return (_options.eventTargetFallbackToDocument && !document.body.contains(target))
+			? document.dispatchEvent(eventAfter) : target.dispatchEvent(eventBefore)
 	}
 
 	after(target, success, result, data)
@@ -147,7 +148,16 @@ class Action
 			canceled: canceled
 		})
 
-		target.dispatchEvent(eventAfter)
+		if (_options.eventTargetFallbackToDocument && !document.body.contains(target))
+		{
+			if (_options.verbose) console.warn('Action.after() target element missing from DOM', {target})
+			document.dispatchEvent(eventAfter)
+		}
+		else
+		{
+			target.dispatchEvent(eventAfter)
+		}
+
 		return result
 	}
 
@@ -327,6 +337,7 @@ let _options = {
 	autoCreate: true,
 	autoCache: true,
 	cssClass: { 'loading': 'loading', 'success': 'success', 'fail': 'fail', 'canceled': 'canceled' },
+	eventTargetFallbackToDocument: true,
 	eventBefore: new CustomEvent('action.before', { bubbles: true, cancelable: true, detail: { type: 'before', name: null, data: null, model: null } }),
 	eventAfter: new CustomEvent('action.after', { bubbles: true, cancelable: true, detail: { type: 'after', name: null, data: null, success: null, model: null } })
 }

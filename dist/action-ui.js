@@ -338,7 +338,7 @@ var ActionUI = function (exports) {
         data: data,
         model: this.model
       });
-      return target.dispatchEvent(eventBefore);
+      return _options.eventTargetFallbackToDocument && !document.body.contains(target) ? document.dispatchEvent(eventAfter) : target.dispatchEvent(eventBefore);
     }
     after(target, success, result, data) {
       if (_options.verbose) console.info('Action.after()', this.name, {
@@ -366,7 +366,14 @@ var ActionUI = function (exports) {
         error: result instanceof Error ? result : false,
         canceled: canceled
       });
-      target.dispatchEvent(eventAfter);
+      if (_options.eventTargetFallbackToDocument && !document.body.contains(target)) {
+        if (_options.verbose) console.warn('Action.after() target element missing from DOM', {
+          target
+        });
+        document.dispatchEvent(eventAfter);
+      } else {
+        target.dispatchEvent(eventAfter);
+      }
       return result;
     }
 
@@ -503,6 +510,7 @@ var ActionUI = function (exports) {
       'fail': 'fail',
       'canceled': 'canceled'
     },
+    eventTargetFallbackToDocument: true,
     eventBefore: new CustomEvent('action.before', {
       bubbles: true,
       cancelable: true,
