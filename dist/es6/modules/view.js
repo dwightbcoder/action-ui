@@ -56,9 +56,11 @@ class View
      * Render view to all matching containers
      * @returns Promise
      */
-    render()
+    render(parent)
     {
-		if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, { view: this })
+        const targets = document.querySelectorAll('[ui-view="' + this._name + '"]')
+        if (targets.length == 0)
+            return Promise.resolve()
 
 		let eventRender = new CustomEvent(this.constructor.options.eventRender.type, this.constructor.options.eventRender)
         let eventRenderBefore = new CustomEvent(this.constructor.options.eventRenderBefore.type, this.constructor.options.eventRenderBefore)
@@ -74,34 +76,35 @@ class View
 			view: this
 		})
 
-        document
-            .querySelectorAll('[ui-view="'+this._name+'"]')
-            .forEach((_target) =>
+        targets.forEach(target =>
+        {
+            let canceled = !target.dispatchEvent(eventRenderBefore)
+            if (!canceled)
             {
-				let canceled = !_target.dispatchEvent(eventRenderBefore)
-				if (!canceled)
-				{
-					_target.innerHTML = eventRender.detail.view.html
-					_target.dispatchEvent(eventRender)
-                    this.renderSubviews(_target)
-                }
-            })
+                if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, { view: this, target, parent })
+
+                target.innerHTML = eventRender.detail.view.html
+                target.dispatchEvent(eventRender)
+                this.renderSubviews(target)
+            }
+        })
         
         return Promise.resolve()
     }
 
     renderSubviews(parent)
     {
-        if ( this.constructor.options.verbose ) console.info( this.constructor.name + '.renderSubviews()', this.name, {view:this, parent:parent} )
-
-        parent.querySelectorAll('[ui-view]')
-        .forEach((_sub) =>
+        const targets = parent.querySelectorAll('[ui-view]')
+        if (targets.length == 0)
+            return Promise.resolve()
+        
+        targets.forEach(target =>
         {
-            let viewName = _sub.getAttribute('ui-view')
+            let viewName = target.getAttribute('ui-view')
             let view = this.constructor.cache(viewName)
             if ( view )
             {
-                view.render()
+                view.render(parent)
             }
         })
     }

@@ -69,8 +69,11 @@ class Model
 	// Sync data object to model
 	sync(data)
 	{
-		data = Util.deepAssign({}, data, true) // Copy and dereference
-		Util.deepAssign(this, data)
+		if (data)
+		{
+			data = Util.deepAssign({}, data, true) // Copy and dereference
+			Util.deepAssign(this, data)
+		}
 		return this
 	}
 

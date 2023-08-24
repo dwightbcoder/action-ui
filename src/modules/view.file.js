@@ -31,12 +31,10 @@ class ViewFile extends View
 		return super.clear()
 	}
 
-	render()
+	render(parent)
 	{
-		if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, { view: this })
-
 		var _promise = this._html == null ? this.fetch() : Promise.resolve()
-		return _promise.then(() => super.render())
+		return _promise.then(() => super.render(parent))
 	}
 
 	fetch()

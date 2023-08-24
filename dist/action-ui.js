@@ -155,8 +155,10 @@ var ActionUI = function (exports) {
 
     // Sync data object to model
     sync(data) {
-      data = deepAssign({}, data, true); // Copy and dereference
-      deepAssign(this, data);
+      if (data) {
+        data = deepAssign({}, data, true); // Copy and dereference
+        deepAssign(this, data);
+      }
       return this;
     }
 
@@ -756,12 +758,15 @@ var ActionUI = function (exports) {
     model(type, id) {
       return id ? this._model[type][id] : this._model[type];
     }
-    modelCreate(type, id = null) {
+    modelCreate(type, id = null, data = null) {
       if (!('string' == typeof type)) throw new Error('Store: Cannot create model without `type`');
       if (!this._model[type]) {
-        this._model[type] = new Model({
-          _type: type
-        }, {
+        let _data = {};
+        if (id == null && data) {
+          _data = data;
+        }
+        _data._type = type;
+        this._model[type] = new Model(_data, {
           model: this._model,
           property: type
         });
@@ -787,14 +792,18 @@ var ActionUI = function (exports) {
             });
           }
         }
+      } else {
+        this._model[type].sync(data);
       }
       if (id != null && ('string' == typeof id || 'number' == typeof id) && !this._model[type][id]) {
-        this._model[type][id] = new Model({
-          _type: type
-        }, {
+        data = data || {};
+        data._type = type;
+        this._model[type][id] = new Model(data, {
           model: this._model[type],
           property: id
         });
+      } else if (id != null && data) {
+        this._model[type][id].sync(data);
       }
       return id ? this._model[type][id] : this._model[type];
     }
@@ -1605,10 +1614,9 @@ var ActionUI = function (exports) {
      * Render view to all matching containers
      * @returns Promise
      */
-    render() {
-      if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
-        view: this
-      });
+    render(parent) {
+      const targets = document.querySelectorAll('[ui-view="' + this._name + '"]');
+      if (targets.length == 0) return Promise.resolve();
       let eventRender = new CustomEvent(this.constructor.options.eventRender.type, this.constructor.options.eventRender);
       let eventRenderBefore = new CustomEvent(this.constructor.options.eventRenderBefore.type, this.constructor.options.eventRenderBefore);
       Object.assign(eventRenderBefore.detail, {
@@ -1619,26 +1627,29 @@ var ActionUI = function (exports) {
         name: this.model.view,
         view: this
       });
-      document.querySelectorAll('[ui-view="' + this._name + '"]').forEach(_target => {
-        let canceled = !_target.dispatchEvent(eventRenderBefore);
+      targets.forEach(target => {
+        let canceled = !target.dispatchEvent(eventRenderBefore);
         if (!canceled) {
-          _target.innerHTML = eventRender.detail.view.html;
-          _target.dispatchEvent(eventRender);
-          this.renderSubviews(_target);
+          if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
+            view: this,
+            target,
+            parent
+          });
+          target.innerHTML = eventRender.detail.view.html;
+          target.dispatchEvent(eventRender);
+          this.renderSubviews(target);
         }
       });
       return Promise.resolve();
     }
     renderSubviews(parent) {
-      if (this.constructor.options.verbose) console.info(this.constructor.name + '.renderSubviews()', this.name, {
-        view: this,
-        parent: parent
-      });
-      parent.querySelectorAll('[ui-view]').forEach(_sub => {
-        let viewName = _sub.getAttribute('ui-view');
+      const targets = parent.querySelectorAll('[ui-view]');
+      if (targets.length == 0) return Promise.resolve();
+      targets.forEach(target => {
+        let viewName = target.getAttribute('ui-view');
         let view = this.constructor.cache(viewName);
         if (view) {
-          view.render();
+          view.render(parent);
         }
       });
     }
@@ -1740,12 +1751,9 @@ var ActionUI = function (exports) {
       this.html = null;
       return super.clear();
     }
-    render() {
-      if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
-        view: this
-      });
+    render(parent) {
       var _promise = this._html == null ? this.fetch() : Promise.resolve();
-      return _promise.then(() => super.render());
+      return _promise.then(() => super.render(parent));
     }
     fetch() {
       if (this.constructor.options.verbose) console.info(this.constructor.name + '.fetch()', this.name, {
@@ -1873,15 +1881,12 @@ var ActionUI = function (exports) {
    * @update Support for pre-compiled templates
    */
   class ViewHandlebars extends ViewFile {
-    render() {
-      if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
-        view: this
-      });
+    render(parent) {
       var _promise = Promise.resolve();
       if (this.html == null && Handlebars.templates && Handlebars.templates[this.file]) {
         this.html = Handlebars.templates[this.file];
       }
-      return _promise.then(() => super.render());
+      return _promise.then(() => super.render(parent));
     }
     fetch() {
       return super.fetch().then(html => {

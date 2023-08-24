@@ -93,15 +93,22 @@ class Store
 		return id ? this._model[type][id] : this._model[type]
 	}
 
-	modelCreate(type, id = null)
+	modelCreate(type, id = null, data = null)
 	{
 		if (!('string' == typeof type))
 			throw new Error('Store: Cannot create model without `type`')
 
 		if (!this._model[type])
 		{
-			this._model[type] = new Model({ _type: type }, { model: this._model, property: type })
+			let _data = {}
+			if ( id == null && data )
+			{
+				_data = data
+			}
 
+			_data._type = type
+			this._model[type] = new Model(_data, { model: this._model, property: type })
+			
 			this.actionCreate(type, 'get')
 			this.actionCreate(type, 'post')
 			this.actionCreate(type, 'patch')
@@ -123,10 +130,20 @@ class Store
 				}
 			}
 		}
+		else
+		{
+			this._model[type].sync(data)
+		}
 
 		if (id != null && ('string' == typeof id || 'number' == typeof id) && !this._model[type][id])
 		{
-			this._model[type][id] = new Model({ _type: type }, { model: this._model[type], property: id })
+			data = data || {}
+			data._type = type
+			this._model[type][id] = new Model(data, { model: this._model[type], property: id })
+		}
+		else if ( id != null && data )
+		{
+			this._model[type][id].sync(data)
 		}
 
 		return id ? this._model[type][id] : this._model[type]

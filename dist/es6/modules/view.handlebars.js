@@ -8,10 +8,8 @@ import { deepAssign } from './util.js'
  */
 class ViewHandlebars extends ViewFile
 {
-    render()
+    render(parent)
     {
-        if ( this.constructor.options.verbose ) console.info( this.constructor.name + '.render()', this.name, {view:this} )
-
         var _promise = Promise.resolve()
 
         if (this.html == null && Handlebars.templates && Handlebars.templates[this.file])
@@ -19,7 +17,7 @@ class ViewHandlebars extends ViewFile
             this.html = Handlebars.templates[this.file]
         }
 
-        return _promise.then(() => super.render())
+        return _promise.then(() => super.render(parent))
     }
 
     fetch()
