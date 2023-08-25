@@ -12,7 +12,7 @@ class View
     {
         if (!(model instanceof Model))
         {
-            model = new Model(model || {controller:null, data:{}, dev:false, error:null, method:null, path:null, view:null})
+            model = new Model(model)
         }
 
         this._name = name

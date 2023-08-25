@@ -1574,15 +1574,7 @@ var ActionUI = function (exports) {
   class View {
     constructor(name, html, model) {
       if (!(model instanceof Model)) {
-        model = new Model(model || {
-          controller: null,
-          data: {},
-          dev: false,
-          error: null,
-          method: null,
-          path: null,
-          view: null
-        });
+        model = new Model(model);
       }
       this._name = name;
       this._html = html;
