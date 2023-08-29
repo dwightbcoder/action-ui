@@ -442,7 +442,10 @@ class Store
 	{
 		if (!url) return Promise.reject()
 		if (fetchOptions == null)
+		{
+			fetchOptions = {}
 			Util.deepCopy(fetchOptions, this.options.fetch)
+		}
 
 		try
 		{

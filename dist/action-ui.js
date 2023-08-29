@@ -1045,7 +1045,10 @@ var ActionUI = function (exports) {
     }
     async fetchUrl(url, type, eventData = {}, fetchOptions = null, skipOnBefore = false) {
       if (!url) return Promise.reject();
-      if (fetchOptions == null) deepCopy(fetchOptions, this.options.fetch);
+      if (fetchOptions == null) {
+        fetchOptions = {};
+        deepCopy(fetchOptions, this.options.fetch);
+      }
       try {
         eventData = eventData || {};
         eventData.type = type;

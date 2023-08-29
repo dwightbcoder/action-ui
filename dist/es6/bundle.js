@@ -1273,7 +1273,10 @@ var ActionUI = (function (exports) {
 		{
 			if (!url) return Promise.reject()
 			if (fetchOptions == null)
+			{
+				fetchOptions = {};
 				deepCopy(fetchOptions, this.options.fetch);
+			}
 
 			try
 			{
