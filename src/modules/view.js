@@ -2,9 +2,9 @@ import { deepAssign } from './util.js'
 import { Model } from './model.js'
 
 /**
- * View
- * @description Creates a view that will be inserted into elements with
- * ui-view="{{name}}" and updated when its attached model changes
+ * @class View
+ * @version 20230829
+ * @description Creates a view that will be inserted into elements with ui-view="{{name}}" and updated when its attached model changes
  */
 class View
 {
@@ -93,8 +93,8 @@ class View
     }
 
     renderSubviews(parent)
-    {
-        const targets = parent.querySelectorAll('[ui-view]')
+	{
+		const targets = parent.querySelectorAll('[ui-view]:not([ui-view="' + parent.getAttribute('ui-view') + '"])')
         if (targets.length == 0)
             return Promise.resolve()
         

@@ -3,8 +3,8 @@ import { Model } from './model.js'
 import { Action } from './action.js'
 
 /**
- * Store
- * @version 20230808
+ * @class Store
+ * @version 20230829
  * @description Remote data store
  * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
  */
@@ -644,6 +644,7 @@ class Store
 			if (!response.ok)
 				return Promise.reject(json)
 
+			this.pagingReset(type)
 			return this.sync(json, url)
 		}
 		catch (error)

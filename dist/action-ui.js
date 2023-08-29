@@ -255,8 +255,9 @@ var ActionUI = function (exports) {
   }
 
   /**
-   * Action UI
-   * Allows named handlers to be handled as state-aware deferred promises with before/after events
+   * @class Action
+   * @version 20230829
+   * @description Allows named handlers to be handled as state-aware deferred promises with before/after events
    */
   class Action {
     constructor(name, handler, model) {
@@ -489,7 +490,7 @@ var ActionUI = function (exports) {
 
     // Propagate class to all reflectors (ui-state and form submit buttons)
     static reflectCssClass(name, cssClass, data = null) {
-      document.querySelectorAll('form[ui-action="' + name + '"] [type="submit"], form[ui-action="' + name + '"] button:not([type]), [ui-state="' + name + '"]').forEach(el => Action.setCssClass(el, cssClass, data));
+      document.querySelectorAll('form[ui-action="' + name + '"] [type="submit"], form[ui-action="' + name + '"] button:not([type]), [ui-state="' + name + '"], [ui-state^="' + name + ',"], [ui-state*=",' + name + ',"], [ui-state$=",' + name + '"]').forEach(el => Action.setCssClass(el, cssClass, data));
     }
     static get options() {
       return _options;
@@ -652,8 +653,8 @@ var ActionUI = function (exports) {
   }
 
   /**
-   * Store
-   * @version 20230808
+   * @class Store
+   * @version 20230829
    * @description Remote data store
    * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
    */
@@ -1196,6 +1197,7 @@ var ActionUI = function (exports) {
         let json = await response.json();
         this.after(type, options, data, response ? response.ok : false, response, json, query);
         if (!response.ok) return Promise.reject(json);
+        this.pagingReset(type);
         return this.sync(json, url);
       } catch (error) {
         if (this.options.triggerChangesOnError) this.model(type).triggerChanges({
@@ -1567,9 +1569,9 @@ var ActionUI = function (exports) {
   }
 
   /**
-   * View
-   * @description Creates a view that will be inserted into elements with
-   * ui-view="{{name}}" and updated when its attached model changes
+   * @class View
+   * @version 20230829
+   * @description Creates a view that will be inserted into elements with ui-view="{{name}}" and updated when its attached model changes
    */
   class View {
     constructor(name, html, model) {
@@ -1635,7 +1637,7 @@ var ActionUI = function (exports) {
       return Promise.resolve();
     }
     renderSubviews(parent) {
-      const targets = parent.querySelectorAll('[ui-view]');
+      const targets = parent.querySelectorAll('[ui-view]:not([ui-view="' + parent.getAttribute('ui-view') + '"])');
       if (targets.length == 0) return Promise.resolve();
       targets.forEach(target => {
         let viewName = target.getAttribute('ui-view');

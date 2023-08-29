@@ -2,8 +2,9 @@
 import { Model } from './model.js'
 
 /**
- * Action UI
- * Allows named handlers to be handled as state-aware deferred promises with before/after events
+ * @class Action
+ * @version 20230829
+ * @description Allows named handlers to be handled as state-aware deferred promises with before/after events
  */
 class Action
 {
@@ -320,7 +321,7 @@ class Action
 	// Propagate class to all reflectors (ui-state and form submit buttons)
 	static reflectCssClass(name, cssClass, data = null)
 	{
-		document.querySelectorAll('form[ui-action="' + name + '"] [type="submit"], form[ui-action="' + name + '"] button:not([type]), [ui-state="' + name + '"]')
+		document.querySelectorAll('form[ui-action="' + name + '"] [type="submit"], form[ui-action="' + name + '"] button:not([type]), [ui-state="' + name + '"], [ui-state^="' + name + ',"], [ui-state*=",' + name + ',"], [ui-state$=",' + name + '"]')
 			.forEach((el) => Action.setCssClass(el, cssClass, data))
 	}
 
