@@ -151,6 +151,7 @@ var ActionUI = (function (exports) {
 
 	/**
 	 * Model
+	 * @version 20230914
 	 * @description Observable data object
 	 */
 
@@ -241,8 +242,13 @@ var ActionUI = (function (exports) {
 
 		triggerChanges(changes)
 		{
-			if (changes) deepAssign(this._changes, changes);
-			return this._trigger(true)
+			for (const i in changes)
+			{
+				if (changes.hasOwnProperty(i) && i[0] != "_")
+				{
+					this._change(i, changes[i], this[i]);
+				}
+			}
 		}
 
 		// @deprecated
@@ -270,8 +276,8 @@ var ActionUI = (function (exports) {
 				{
 					callbacks[i].call(this, this._changes);
 				}
-				
-				if (this._parent != null)
+
+				if (this._parent != null && this._parent.property != null && this._parent.property[0] != '_')
 				{
 					this._parent.model.triggerChanges({ child: this, changes: this._changes});
 				}
@@ -285,11 +291,9 @@ var ActionUI = (function (exports) {
 		_change(prop, value, originalValue)
 		{
 			this._changes[prop] = { value: value, originalValue: originalValue };
-
-			if (!this._timer)
-			{
-				this._timer = window.setTimeout(() => this._trigger(), this._options.triggerDelay);
-			}
+			
+			window.clearTimeout(this._timer);
+			this._timer = window.setTimeout(() => this._trigger(), this._options.triggerDelay);
 		}
 
 		static _proxySet(target, prop, value)
