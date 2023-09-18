@@ -174,7 +174,7 @@ var ActionUI = function (exports) {
     }
     triggerChanges(changes) {
       for (const i in changes) {
-        if (changes.hasOwnProperty(i) && i[0] != "_") {
+        if (changes.hasOwnProperty(i)) {
           this._change(i, changes[i], this[i]);
         }
       }
@@ -200,7 +200,7 @@ var ActionUI = function (exports) {
         for (let i in callbacks) {
           callbacks[i].call(this, this._changes);
         }
-        if (this._parent != null && this._parent.property != null && this._parent.property[0] != '_') {
+        if (this._parent != null && this._parent.property != null) {
           this._parent.model.triggerChanges({
             child: this,
             changes: this._changes
@@ -1071,7 +1071,7 @@ var ActionUI = function (exports) {
         if (!response.ok) return Promise.reject(json);
         let model = this.sync(json, url);
         this.urlCache(parsedUrl, model, json);
-        return model;
+        return Promise.resolve(model);
       } catch (error) {
         if (type && this.options.triggerChangesOnError && this._model[type]) this.model(type).triggerChanges({
           __error: error

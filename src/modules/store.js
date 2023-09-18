@@ -475,7 +475,7 @@ class Store
 
 			let model = this.sync(json, url)
 			this.urlCache(parsedUrl, model, json)
-			return model
+			return Promise.resolve(model)
 		}
 		catch (error)
 		{

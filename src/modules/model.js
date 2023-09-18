@@ -95,7 +95,7 @@ class Model
 	{
 		for (const i in changes)
 		{
-			if (changes.hasOwnProperty(i) && i[0] != "_")
+			if (changes.hasOwnProperty(i))
 			{
 				this._change(i, changes[i], this[i])
 			}
@@ -128,7 +128,7 @@ class Model
 				callbacks[i].call(this, this._changes)
 			}
 
-			if (this._parent != null && this._parent.property != null && this._parent.property[0] != '_')
+			if (this._parent != null && this._parent.property != null)
 			{
 				this._parent.model.triggerChanges({ child: this, changes: this._changes})
 			}
