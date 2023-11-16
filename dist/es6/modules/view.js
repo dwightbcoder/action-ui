@@ -3,7 +3,7 @@ import { Model } from './model.js'
 
 /**
  * @class View
- * @version 20230829
+ * @version 20231116
  * @description Creates a view that will be inserted into elements with ui-view="{{name}}" and updated when its attached model changes
  */
 class View
@@ -62,29 +62,36 @@ class View
         if (targets.length == 0)
             return Promise.resolve()
 
-		let eventRender = new CustomEvent(this.constructor.options.eventRender.type, this.constructor.options.eventRender)
-        let eventRenderBefore = new CustomEvent(this.constructor.options.eventRenderBefore.type, this.constructor.options.eventRenderBefore)
-
-		Object.assign(eventRenderBefore.detail, {
-			name: this.model.view,
-			view: this
-		})
-
-		Object.assign(eventRender.detail,
+        let eventRenderBefore = null
+        if (this.constructor.options.eventRenderBefore)
         {
-			name: this.model.view,
-			view: this
-		})
+            eventRenderBefore = new this.constructor.options.eventRenderBefore({
+                name: this.model.view,
+                view: this
+            })
+        }
+
+        let eventRender = null
+        if (this.constructor.options.eventRender)
+        {
+            eventRender = new this.constructor.options.eventRender({
+                name: this.model.view,
+                view: this
+            })
+        }
 
         targets.forEach(target =>
         {
-            let canceled = !target.dispatchEvent(eventRenderBefore)
+            let canceled = eventRenderBefore ? !target.dispatchEvent(eventRenderBefore) : false
             if (!canceled)
             {
                 if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, { view: this, target, parent })
 
-                target.innerHTML = eventRender.detail.view.html
-                target.dispatchEvent(eventRender)
+                target.innerHTML = eventRender ? eventRender.detail.view.html : this.html
+                if (eventRender)
+                {
+                    target.dispatchEvent(eventRender)
+                }
                 this.renderSubviews(target)
             }
         })
@@ -157,12 +164,32 @@ class View
     // #endregion
 }
 
+class ViewEventRenderBefore extends Event
+{
+	constructor(detail)
+	{
+		super('view.render.before', { bubbles: true, cancelable: true })
+		this.detail = { type: 'render.before', name: null, view: null }
+		Object.assign(this.detail, detail)
+	}
+}
+
+class ViewEventRender extends Event
+{
+	constructor(detail)
+	{
+		super('view.render', { bubbles: true, cancelable: true })
+		this.detail = { type: 'render', name: null, view: null }
+		Object.assign(this.detail, detail)
+	}
+}
+
 let _cache = {}
 let _options = {
     verbose: false,
     autoCache: true, // Automatically cache views when created
-    eventRenderBefore: new CustomEvent('view.render.before', { bubbles: true, cancelable: true, detail: { type: 'render.before', name: null, view: null } }),
-    eventRender: new CustomEvent('view.render', { bubbles: true, cancelable: true, detail: { type: 'render', name: null, view: null } })
+    eventRenderBefore: ViewEventRenderBefore,
+    eventRender: ViewEventRender
 }
 
-export { View }
+export { View, ViewEventRender, ViewEventRenderBefore }

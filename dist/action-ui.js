@@ -259,7 +259,7 @@ var ActionUI = function (exports) {
 
   /**
    * @class Action
-   * @version 20230829
+   * @version 20231116
    * @description Allows named handlers to be handled as state-aware deferred promises with before/after events
    */
   class Action {
@@ -338,13 +338,15 @@ var ActionUI = function (exports) {
       });
       Action.setCssClass(target, _options.cssClass.loading, data);
       Action.reflectCssClass(this.name, _options.cssClass.loading, data);
-      let eventBefore = new CustomEvent(_options.eventBefore.type, _options.eventBefore);
-      Object.assign(eventBefore.detail, {
-        name: this.name,
-        data: data,
-        model: this.model
-      });
-      return _options.eventTargetFallbackToDocument && !document.body.contains(target) ? document.dispatchEvent(eventAfter) : target.dispatchEvent(eventBefore);
+      if (_options.eventBefore) {
+        const eventBefore = new _options.eventBefore({
+          name: this.name,
+          data: data,
+          model: this.model
+        });
+        return _options.eventTargetFallbackToDocument && !document.body.contains(target) ? document.dispatchEvent(eventAfter) : target.dispatchEvent(eventBefore);
+      }
+      return true;
     }
     after(target, success, result, data) {
       if (_options.verbose) console.info('Action.after()', this.name, {
@@ -360,25 +362,26 @@ var ActionUI = function (exports) {
       if (canceled) cssClass = _options.cssClass.canceled;
       Action.setCssClass(target, cssClass, data);
       Action.reflectCssClass(this.name, cssClass, data);
-      if (result != undefined && !(result instanceof Error)) {
+      if (success && result != undefined && !(result instanceof Error)) {
         this.syncModel(result);
       }
-      let eventAfter = new CustomEvent(_options.eventAfter.type, _options.eventAfter);
-      Object.assign(eventAfter.detail, {
-        name: this.name,
-        success: success,
-        data: data,
-        model: this.model,
-        error: result instanceof Error ? result : false,
-        canceled: canceled
-      });
-      if (_options.eventTargetFallbackToDocument && !document.body.contains(target)) {
-        if (_options.verbose) console.warn('Action.after() target element missing from DOM', {
-          target
+      if (_options.eventAfter) {
+        const eventAfter = new _options.eventAfter({
+          name: this.name,
+          success: success,
+          data: data,
+          model: success ? this.model : new Model(result),
+          error: result instanceof Error ? result : false,
+          canceled: canceled
         });
-        document.dispatchEvent(eventAfter);
-      } else {
-        target.dispatchEvent(eventAfter);
+        if (_options.eventTargetFallbackToDocument && !document.body.contains(target)) {
+          if (_options.verbose) console.warn('Action.after() target element missing from DOM', {
+            target
+          });
+          document.dispatchEvent(eventAfter);
+        } else {
+          target.dispatchEvent(eventAfter);
+        }
       }
       return result;
     }
@@ -505,6 +508,39 @@ var ActionUI = function (exports) {
   }
 
   class ActionErrorCanceled extends Error {}
+  class ActionEventBefore extends Event {
+    constructor(detail) {
+      super('action.before', {
+        bubbles: true,
+        cancelable: true
+      });
+      this.detail = {
+        type: 'before',
+        name: null,
+        data: null,
+        model: null
+      };
+      Object.assign(this.detail, detail);
+    }
+  }
+  class ActionEventAfter extends Event {
+    constructor(detail) {
+      super('action.after', {
+        bubbles: true,
+        cancelable: true
+      });
+      this.detail = {
+        type: 'after',
+        name: null,
+        data: null,
+        model: null,
+        success: null,
+        error: null,
+        canceled: null
+      };
+      Object.assign(this.detail, detail);
+    }
+  }
   let _cache = {};
   let _options = {
     verbose: false,
@@ -517,27 +553,8 @@ var ActionUI = function (exports) {
       'canceled': 'canceled'
     },
     eventTargetFallbackToDocument: true,
-    eventBefore: new CustomEvent('action.before', {
-      bubbles: true,
-      cancelable: true,
-      detail: {
-        type: 'before',
-        name: null,
-        data: null,
-        model: null
-      }
-    }),
-    eventAfter: new CustomEvent('action.after', {
-      bubbles: true,
-      cancelable: true,
-      detail: {
-        type: 'after',
-        name: null,
-        data: null,
-        success: null,
-        model: null
-      }
-    })
+    eventBefore: ActionEventBefore,
+    eventAfter: ActionEventAfter
   };
   Action.init();
 
@@ -657,7 +674,7 @@ var ActionUI = function (exports) {
 
   /**
    * @class Store
-   * @version 20230829
+   * @version 20231116
    * @description Remote data store
    * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
    */
@@ -704,36 +721,8 @@ var ActionUI = function (exports) {
           'patch': this.actionHandler,
           'delete': this.actionHandler
         },
-        eventBefore: new CustomEvent('store.before', {
-          bubbles: true,
-          cancelable: true,
-          detail: {
-            type: 'before',
-            name: null,
-            fetch: null,
-            type: null,
-            data: null,
-            model: null,
-            view: null,
-            query: null
-          }
-        }),
-        eventAfter: new CustomEvent('store.after', {
-          bubbles: true,
-          detail: {
-            type: 'after',
-            name: null,
-            fetch: null,
-            type: null,
-            data: null,
-            model: null,
-            view: null,
-            success: null,
-            response: null,
-            json: null,
-            query: null
-          }
-        })
+        eventBefore: StoreEventBefore,
+        eventAfter: StoreEventAfter
       };
       deepAssign(this.options, options || {});
       this._model = new Model();
@@ -1331,18 +1320,20 @@ var ActionUI = function (exports) {
           this.options.viewClass.setCssClass(_target, this.options.viewClass.options.cssClass.loading);
         });
       }
-      let eventBefore = new CustomEvent(this.options.eventBefore.type, this.options.eventBefore);
-      Object.assign(eventBefore.detail, {
-        name: _name,
-        fetch: fetch,
-        store: this,
-        type: type,
-        data: data,
-        model: this.model(type),
-        view: view,
-        query: query
-      });
-      return document.dispatchEvent(eventBefore);
+      if (this.options.eventBefore) {
+        const eventBefore = new this.options.eventBefore({
+          name: _name,
+          fetch: fetch,
+          store: this,
+          type: type,
+          data: data,
+          model: this.model(type),
+          view: view,
+          query: query
+        });
+        return document.dispatchEvent(eventBefore);
+      }
+      return true;
     }
     after(type, fetch, data, success, response, json, query = {}) {
       let _name = this.options.baseUrl + '/' + type;
@@ -1368,21 +1359,23 @@ var ActionUI = function (exports) {
           if (fetch && fetch.method == 'GET') this.options.viewClass.setCssClass(_target, success ? this.options.viewClass.options.cssClass.success : this.options.viewClass.options.cssClass.fail);else _target.classList.remove(this.options.viewClass.options.cssClass.loading);
         });
       }
-      let eventAfter = new CustomEvent(this.options.eventAfter.type, this.options.eventAfter);
-      Object.assign(eventAfter.detail, {
-        name: _name,
-        success: success,
-        fetch: fetch,
-        store: this,
-        type: type,
-        data: data,
-        model: this.model(type),
-        view: view,
-        response: response,
-        json: json,
-        query: query
-      });
-      return document.dispatchEvent(eventAfter);
+      if (this.options.eventAfter) {
+        const eventAfter = new this.options.eventAfter({
+          name: _name,
+          success: success,
+          fetch: fetch,
+          store: this,
+          type: type,
+          data: data,
+          model: this.model(type),
+          view: view,
+          response: response,
+          json: json,
+          query: query
+        });
+        return document.dispatchEvent(eventAfter);
+      }
+      return true;
     }
     static cache(store) {
       if (store == undefined) return _cache$1;
@@ -1403,6 +1396,44 @@ var ActionUI = function (exports) {
     }
   }
   class StoreErrorDataEmpty extends Error {}
+  class StoreEventBefore extends Event {
+    constructor(detail) {
+      super('store.before', {
+        bubbles: true,
+        cancelable: true
+      });
+      this.detail = {
+        type: 'before',
+        name: null,
+        fetch: null,
+        type: null,
+        data: null,
+        model: null,
+        view: null,
+        query: null
+      };
+      Object.assign(this.detail, detail);
+    }
+  }
+  class StoreEventAfter extends Event {
+    constructor(detail) {
+      super('store.after', {
+        bubbles: true
+      });
+      this.detail = {
+        type: 'after',
+        name: null,
+        fetch: null,
+        type: null,
+        data: null,
+        model: null,
+        view: null,
+        query: null,
+        json: null
+      };
+      Object.assign(this.detail, detail);
+    }
+  }
   let _cache$1 = {};
   class StoreJsonApi extends Store {
     constructor(options) {
@@ -1576,7 +1607,7 @@ var ActionUI = function (exports) {
 
   /**
    * @class View
-   * @version 20230829
+   * @version 20231116
    * @description Creates a view that will be inserted into elements with ui-view="{{name}}" and updated when its attached model changes
    */
   class View {
@@ -1617,26 +1648,32 @@ var ActionUI = function (exports) {
     render(parent) {
       const targets = document.querySelectorAll('[ui-view="' + this._name + '"]');
       if (targets.length == 0) return Promise.resolve();
-      let eventRender = new CustomEvent(this.constructor.options.eventRender.type, this.constructor.options.eventRender);
-      let eventRenderBefore = new CustomEvent(this.constructor.options.eventRenderBefore.type, this.constructor.options.eventRenderBefore);
-      Object.assign(eventRenderBefore.detail, {
-        name: this.model.view,
-        view: this
-      });
-      Object.assign(eventRender.detail, {
-        name: this.model.view,
-        view: this
-      });
+      let eventRenderBefore = null;
+      if (this.constructor.options.eventRenderBefore) {
+        eventRenderBefore = new this.constructor.options.eventRenderBefore({
+          name: this.model.view,
+          view: this
+        });
+      }
+      let eventRender = null;
+      if (this.constructor.options.eventRender) {
+        eventRender = new this.constructor.options.eventRender({
+          name: this.model.view,
+          view: this
+        });
+      }
       targets.forEach(target => {
-        let canceled = !target.dispatchEvent(eventRenderBefore);
+        let canceled = eventRenderBefore ? !target.dispatchEvent(eventRenderBefore) : false;
         if (!canceled) {
           if (this.constructor.options.verbose) console.info(this.constructor.name + '.render()', this.name, {
             view: this,
             target,
             parent
           });
-          target.innerHTML = eventRender.detail.view.html;
-          target.dispatchEvent(eventRender);
+          target.innerHTML = eventRender ? eventRender.detail.view.html : this.html;
+          if (eventRender) {
+            target.dispatchEvent(eventRender);
+          }
           this.renderSubviews(target);
         }
       });
@@ -1706,33 +1743,46 @@ var ActionUI = function (exports) {
     // #endregion
   }
 
+  class ViewEventRenderBefore extends Event {
+    constructor(detail) {
+      super('view.render.before', {
+        bubbles: true,
+        cancelable: true
+      });
+      this.detail = {
+        type: 'render.before',
+        name: null,
+        view: null
+      };
+      Object.assign(this.detail, detail);
+    }
+  }
+  class ViewEventRender extends Event {
+    constructor(detail) {
+      super('view.render', {
+        bubbles: true,
+        cancelable: true
+      });
+      this.detail = {
+        type: 'render',
+        name: null,
+        view: null
+      };
+      Object.assign(this.detail, detail);
+    }
+  }
   let _cache$2 = {};
   let _options$1 = {
     verbose: false,
     autoCache: true,
     // Automatically cache views when created
-    eventRenderBefore: new CustomEvent('view.render.before', {
-      bubbles: true,
-      cancelable: true,
-      detail: {
-        type: 'render.before',
-        name: null,
-        view: null
-      }
-    }),
-    eventRender: new CustomEvent('view.render', {
-      bubbles: true,
-      cancelable: true,
-      detail: {
-        type: 'render',
-        name: null,
-        view: null
-      }
-    })
+    eventRenderBefore: ViewEventRenderBefore,
+    eventRender: ViewEventRender
   };
 
   /**
    * ViewFile
+   * @version 20231116
    * @description View that fetches html from a file
    */
   class ViewFile extends View {
@@ -1783,12 +1833,13 @@ var ActionUI = function (exports) {
         this.constructor.setCssClass(target, _options$2.cssClass.loading);
       });
       if (this.constructor.options.eventFetch) {
-        Object.assign(this.constructor.options.eventFetch.detail, {
+        const eventFetch = new this.constructor.options.eventFetch({
           view: this,
           success: null
         });
-        document.dispatchEvent(this.constructor.options.eventFetch);
+        document.dispatchEvent(eventFetch);
       }
+      return true;
     }
     fetchAfter(success) {
       if (this.constructor.options.verbose) console.info(this.constructor.name + '.fetchAfter()', this.name, {
@@ -1798,12 +1849,13 @@ var ActionUI = function (exports) {
         this.constructor.setCssClass(target, success ? _options$2.cssClass.success : _options$2.cssClass.fail);
       });
       if (this.constructor.options.eventFetch) {
-        Object.assign(this.constructor.options.eventFetch.detail, {
+        const eventFetch = new this.constructor.options.eventFetch({
           view: this,
           success: success
         });
-        document.dispatchEvent(this.constructor.options.eventFetch);
+        document.dispatchEvent(eventFetch);
       }
+      return success;
     }
     get fileName() {
       return this.file + '.' + this.constructor.options.extension;
@@ -1848,6 +1900,19 @@ var ActionUI = function (exports) {
     // #endregion
   }
 
+  class ViewFileEventFetch extends Event {
+    constructor(detail) {
+      super('view.fetch', {
+        bubbles: true
+      });
+      this.detail = {
+        type: 'fetch',
+        view: null,
+        success: null
+      };
+      Object.assign(this.detail, detail);
+    }
+  }
   let _options$2 = {
     basePath: 'view/',
     extension: 'html',
@@ -1856,22 +1921,8 @@ var ActionUI = function (exports) {
       'success': 'success',
       'fail': 'fail'
     },
-    eventFetch: new CustomEvent('view.fetch', {
-      bubbles: true,
-      detail: {
-        type: 'fetch',
-        view: null,
-        success: null
-      }
-    }),
-    eventRender: new CustomEvent('view.render', {
-      bubbles: true,
-      cancelable: true,
-      detail: {
-        type: 'render',
-        view: null
-      }
-    })
+    eventFetch: ViewFileEventFetch,
+    eventRender: ViewEventRender
   };
   ViewFile.options = View.options;
 

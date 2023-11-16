@@ -3,7 +3,7 @@ import { Model } from './model.js'
 
 /**
  * @class Action
- * @version 20230829
+ * @version 20231116
  * @description Allows named handlers to be handled as state-aware deferred promises with before/after events
  */
 class Action
@@ -110,16 +110,19 @@ class Action
 		Action.setCssClass(target, _options.cssClass.loading, data)
 		Action.reflectCssClass(this.name, _options.cssClass.loading, data)
 
-		let eventBefore = new CustomEvent(_options.eventBefore.type, _options.eventBefore)
+		if (_options.eventBefore)
+		{
+			const eventBefore = new _options.eventBefore({
+				name: this.name,
+				data: data,
+				model: this.model
+			})
 
-		Object.assign(eventBefore.detail, {
-			name: this.name,
-			data: data,
-			model: this.model
-		})
+			return (_options.eventTargetFallbackToDocument && !document.body.contains(target))
+				? document.dispatchEvent(eventAfter) : target.dispatchEvent(eventBefore)
+		}
 
-		return (_options.eventTargetFallbackToDocument && !document.body.contains(target))
-			? document.dispatchEvent(eventAfter) : target.dispatchEvent(eventBefore)
+		return true
 	}
 
 	after(target, success, result, data)
@@ -133,30 +136,31 @@ class Action
 		Action.setCssClass(target, cssClass, data)
 		Action.reflectCssClass(this.name, cssClass, data)
 
-		if (result != undefined && !(result instanceof Error))
+		if (success && result != undefined && !(result instanceof Error))
 		{
 			this.syncModel(result)
 		}
 
-		let eventAfter = new CustomEvent(_options.eventAfter.type, _options.eventAfter)
-
-		Object.assign(eventAfter.detail, {
-			name: this.name,
-			success: success,
-			data: data,
-			model: this.model,
-			error: (result instanceof Error) ? result : false,
-			canceled: canceled
-		})
-
-		if (_options.eventTargetFallbackToDocument && !document.body.contains(target))
+		if (_options.eventAfter)
 		{
-			if (_options.verbose) console.warn('Action.after() target element missing from DOM', {target})
-			document.dispatchEvent(eventAfter)
-		}
-		else
-		{
-			target.dispatchEvent(eventAfter)
+			const eventAfter = new _options.eventAfter({
+				name: this.name,
+				success: success,
+				data: data,
+				model: success ? this.model : new Model(result),
+				error: (result instanceof Error) ? result : false,
+				canceled: canceled
+			})
+
+			if (_options.eventTargetFallbackToDocument && !document.body.contains(target))
+			{
+				if (_options.verbose) console.warn('Action.after() target element missing from DOM', {target})
+				document.dispatchEvent(eventAfter)
+			}
+			else
+			{
+				target.dispatchEvent(eventAfter)
+			}
 		}
 
 		return result
@@ -332,6 +336,26 @@ class Action
 
 class ActionErrorCanceled extends Error { }
 
+class ActionEventBefore extends Event
+{
+	constructor(detail)
+	{
+		super('action.before', { bubbles: true, cancelable: true })
+		this.detail = { type: 'before', name: null, data: null, model: null }
+		Object.assign(this.detail, detail)
+	}
+}
+
+class ActionEventAfter extends Event
+{
+	constructor(detail)
+	{
+		super('action.after', { bubbles: true, cancelable: true })
+		this.detail = { type: 'after', name: null, data: null, model: null, success: null, error: null, canceled: null }
+		Object.assign(this.detail, detail)
+	}
+}
+
 let _cache = {}
 let _options = {
 	verbose: false,
@@ -339,10 +363,10 @@ let _options = {
 	autoCache: true,
 	cssClass: { 'loading': 'loading', 'success': 'success', 'fail': 'fail', 'canceled': 'canceled' },
 	eventTargetFallbackToDocument: true,
-	eventBefore: new CustomEvent('action.before', { bubbles: true, cancelable: true, detail: { type: 'before', name: null, data: null, model: null } }),
-	eventAfter: new CustomEvent('action.after', { bubbles: true, cancelable: true, detail: { type: 'after', name: null, data: null, success: null, model: null } })
+	eventBefore: ActionEventBefore,
+	eventAfter: ActionEventAfter
 }
 
 Action.init()
 
-export { Action, ActionErrorCanceled }
+export { Action, ActionErrorCanceled, ActionEventBefore, ActionEventAfter }

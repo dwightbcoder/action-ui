@@ -1,8 +1,9 @@
-import { View } from './view.js'
+import { View, ViewEventRender } from './view.js'
 import { deepAssign } from './util.js'
 
 /**
  * ViewFile
+ * @version 20231116
  * @description View that fetches html from a file
  */
 class ViewFile extends View
@@ -72,13 +73,15 @@ class ViewFile extends View
 
 		if (this.constructor.options.eventFetch)
 		{
-			Object.assign(this.constructor.options.eventFetch.detail, {
+			const eventFetch = new this.constructor.options.eventFetch({
 				view: this,
 				success: null
 			})
 
-			document.dispatchEvent(this.constructor.options.eventFetch)
+			document.dispatchEvent(eventFetch)
 		}
+
+		return true
 	}
 
 	fetchAfter(success)
@@ -94,13 +97,15 @@ class ViewFile extends View
 
 		if (this.constructor.options.eventFetch)
 		{
-			Object.assign(this.constructor.options.eventFetch.detail, {
+			const eventFetch = new this.constructor.options.eventFetch({
 				view: this,
 				success: success
 			})
 
-			document.dispatchEvent(this.constructor.options.eventFetch)
+			document.dispatchEvent(eventFetch)
 		}
+
+		return success
 	}
 
 	get fileName() { return this.file + '.' + this.constructor.options.extension }
@@ -145,13 +150,23 @@ class ViewFile extends View
 	// #endregion
 }
 
+class ViewFileEventFetch extends Event
+{
+	constructor(detail)
+	{
+		super('view.fetch', { bubbles: true })
+		this.detail = { type: 'fetch', view: null, success: null }
+		Object.assign(this.detail, detail)
+	}
+}
+
 let _options = {
 	basePath: 'view/',
 	extension: 'html',
 	cssClass: { 'loading': 'loading', 'success': 'success', 'fail': 'fail' },
-	eventFetch: new CustomEvent('view.fetch', { bubbles: true, detail: { type: 'fetch', view: null, success: null } }),
-	eventRender: new CustomEvent('view.render', { bubbles: true, cancelable: true, detail: { type: 'render', view: null } })
+	eventFetch: ViewFileEventFetch,
+	eventRender: ViewEventRender
 }
 ViewFile.options = View.options
 
-export { ViewFile }
+export { ViewFile, ViewFileEventFetch }

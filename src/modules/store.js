@@ -4,7 +4,7 @@ import { Action } from './action.js'
 
 /**
  * @class Store
- * @version 20230829
+ * @version 20231116
  * @description Remote data store
  * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
  */
@@ -50,8 +50,8 @@ class Store
 				'patch': this.actionHandler,
 				'delete': this.actionHandler
 			},
-			eventBefore: new CustomEvent('store.before', { bubbles: true, cancelable: true, detail: { type: 'before', name: null, fetch: null, type: null, data: null, model: null, view: null, query: null } }),
-			eventAfter: new CustomEvent('store.after', { bubbles: true, detail: { type: 'after', name: null, fetch: null, type: null, data: null, model: null, view: null, success: null, response: null, json: null, query: null } })
+			eventBefore: StoreEventBefore,
+			eventAfter: StoreEventAfter
 		}
 		Util.deepAssign(this.options, options || {})
 
@@ -795,20 +795,23 @@ class Store
 				})
 		}
 
-		let eventBefore = new CustomEvent(this.options.eventBefore.type, this.options.eventBefore)
+		if (this.options.eventBefore)
+		{
+			const eventBefore = new this.options.eventBefore({
+				name: _name,
+				fetch: fetch,
+				store: this,
+				type: type,
+				data: data,
+				model: this.model(type),
+				view: view,
+				query: query
+			})
+			
+			return document.dispatchEvent(eventBefore)
+		}
 
-		Object.assign(eventBefore.detail, {
-			name: _name,
-			fetch: fetch,
-			store: this,
-			type: type,
-			data: data,
-			model: this.model(type),
-			view: view,
-			query: query
-		})
-
-		return document.dispatchEvent(eventBefore)
+		return true
 	}
 
 	after(type, fetch, data, success, response, json, query = {})
@@ -837,23 +840,26 @@ class Store
 				})
 		}
 
-		let eventAfter = new CustomEvent(this.options.eventAfter.type, this.options.eventAfter)
+		if (this.options.eventAfter)
+		{
+			const eventAfter = new this.options.eventAfter({
+				name: _name,
+				success: success,
+				fetch: fetch,
+				store: this,
+				type: type,
+				data: data,
+				model: this.model(type),
+				view: view,
+				response: response,
+				json: json,
+				query: query
+			})
+			
+			return document.dispatchEvent(eventAfter)
+		}
 
-		Object.assign(eventAfter.detail, {
-			name: _name,
-			success: success,
-			fetch: fetch,
-			store: this,
-			type: type,
-			data: data,
-			model: this.model(type),
-			view: view,
-			response: response,
-			json: json,
-			query: query
-		})
-
-		return document.dispatchEvent(eventAfter)
+		return true
 	}
 
 	static cache(store)
@@ -888,6 +894,26 @@ class Store
 }
 class StoreErrorDataEmpty extends Error { }
 
+class StoreEventBefore extends Event
+{
+	constructor(detail)
+	{
+		super('store.before', { bubbles: true, cancelable: true })
+		this.detail = { type: 'before', name: null, fetch: null, type: null, data: null, model: null, view: null, query: null }
+		Object.assign(this.detail, detail)
+	}
+}
+
+class StoreEventAfter extends Event
+{
+	constructor(detail)
+	{
+		super('store.after', { bubbles: true })
+		this.detail = { type: 'after', name: null, fetch: null, type: null, data: null, model: null, view: null, query: null, json: null }
+		Object.assign(this.detail, detail)
+	}
+}
+
 let _cache = {}
 
-export { Store, StoreErrorDataEmpty }
+export { Store, StoreErrorDataEmpty, StoreEventBefore, StoreEventAfter }
