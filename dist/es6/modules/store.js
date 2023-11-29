@@ -4,7 +4,7 @@ import { Action } from './action.js'
 
 /**
  * @class Store
- * @version 20231116
+ * @version 20231129
  * @description Remote data store
  * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
  */
@@ -147,6 +147,14 @@ class Store
 		}
 
 		return id ? this._model[type][id] : this._model[type]
+	}
+
+	abort(type, reason)
+	{
+		if (this._model[type] && this._model[type]._abortController)
+		{
+			this._model[type]._abortController.abort(reason)
+		}
 	}
 
 	actionCreate(type, method)
@@ -414,7 +422,21 @@ class Store
 		}
 	}
 
-	async fetch(type, id, query = {})
+	fetchOptions(type, options = {}, overrides = {})
+	{
+		Util.deepCopy(options, this.options.fetch)
+		Util.deepCopy(options, overrides)
+
+		if (!options.signal && this._model[type])
+		{
+			this._model[type]._abortController = new AbortController()
+			options.signal = this._model[type]._abortController.signal
+		}
+
+		return options
+	}
+
+	async fetch(type, id, query = {}, options = {})
 	{
 		type = this.type({ type: type })
 		query = query || {}
@@ -427,8 +449,7 @@ class Store
 		}
 
 		let data = { type: type, id: id }
-		let options = {}
-		Util.deepCopy(options, this.options.fetch)
+		this.fetchOptions(type, options)
 		this.before(type, options, data, query)
 		let url = this.url(Object.assign({}, query, data))
 
@@ -444,7 +465,7 @@ class Store
 		if (fetchOptions == null)
 		{
 			fetchOptions = {}
-			Util.deepCopy(fetchOptions, this.options.fetch)
+			this.fetchOptions(type, fetchOptions)
 		}
 
 		try
@@ -468,7 +489,7 @@ class Store
 				this.before(type, fetchOptions, eventData)
 			const response = await fetch(url, fetchOptions)
 			let json = await response.json()
-			this.after(type, this.options.fetch, eventData, (response ? response.ok : false), response, json)
+			this.after(type, fetchOptions, eventData, (response ? response.ok : false), response, json)
 
 			if (!response.ok)
 			return Promise.reject(json)
@@ -582,7 +603,7 @@ class Store
 		return pageNumber && pageSize ? this.page(type, pageNumber, pageSize, pageQuery) : Promise.resolve()
 	}
 
-	async page(type, pageNumber = 1, pageSize = 0, query = {})
+	async page(type, pageNumber = 1, pageSize = 0, query = {}, options = {})
 	{
 		query = query || {}
 		pageSize = parseInt(pageSize) || this.options.defaultPageSize
@@ -592,7 +613,7 @@ class Store
 		query[this.options.query['page[number]']] = pageNumber
 		query[this.options.query['page[size]']] = pageSize
 
-		return await this.fetch(type, 0, query)
+		return await this.fetch(type, 0, query, options)
 	}
 
 	pageChange(type, pageNumber, pageSize, query = {})
@@ -623,11 +644,10 @@ class Store
 		return searchParams.toString()
 	}
 
-	async post(type, data, query = {})
+	async post(type, data, query = {}, options = {})
 	{
 		type = type || this.type(data)
-		let options = {}
-		Util.deepCopy(options, this.options.fetch)
+		this.fetchOptions(type, options)
 
 		options.method = 'POST'
 		options.body = this.body(type, data)
@@ -657,13 +677,10 @@ class Store
 		}
 	}
 
-	async patch(type, data, query = {})
+	async patch(type, data, query = {}, options = {})
 	{
 		type = type || this.type(data)
-		let options = {}
-		Util.deepCopy(options, this.options.fetch)
-		options.method = 'PATCH'
-		options.body = this.body(type, data)
+		this.fetchOptions(type, options, { method: 'PATCH', body: this.body(type, data) })
 		this.before(type, options, data, query)
 
 		let url = this.url(Object.assign({}, query, { type: type, id: this.id(data) }))
@@ -689,13 +706,11 @@ class Store
 		}
 	}
 
-	async delete(type, id, query = {})
+	async delete(type, id, query = {}, options = {})
 	{
 		let data = {}
 		data[this.options.keys.id] = id
-		let options = {}
-		Util.deepCopy(options, this.options.fetch)
-		options.method = 'DELETE'
+		this.fetchOptions(type, options, { method: 'DELETE' })
 		this.before(type, options, data, query)
 
 		let url = this.url(Object.assign({}, query, { type: type, id: data.id }))

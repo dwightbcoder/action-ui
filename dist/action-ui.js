@@ -36,7 +36,6 @@ var ActionUI = function (exports) {
     }
     return target; // For simpler dereference usage
   }
-
   function deepCopy(target, source) {
     return deepAssign(target, source, true);
   }
@@ -243,7 +242,6 @@ var ActionUI = function (exports) {
         });
         return true; // Don't trigger changes for non-enumerable/private properties
       }
-
       target._change(prop, value, originalValue);
       return true;
     }
@@ -506,7 +504,6 @@ var ActionUI = function (exports) {
     }
     // #endregion
   }
-
   class ActionErrorCanceled extends Error {}
   class ActionEventBefore extends Event {
     constructor(detail) {
@@ -613,7 +610,6 @@ var ActionUI = function (exports) {
         }
         return _collection; //this[json.data[0].type]
       }
-
       let type = json.data.type;
       let id = json.data.id;
       if (!this[type]) {
@@ -674,7 +670,7 @@ var ActionUI = function (exports) {
 
   /**
    * @class Store
-   * @version 20231116
+   * @version 20231129
    * @description Remote data store
    * @tutorial let store = new Store({baseUrl:'http://localhost:8080/api', types:['category', 'product']})
    */
@@ -799,6 +795,11 @@ var ActionUI = function (exports) {
         this._model[type][id].sync(data);
       }
       return id ? this._model[type][id] : this._model[type];
+    }
+    abort(type, reason) {
+      if (this._model[type] && this._model[type]._abortController) {
+        this._model[type]._abortController.abort(reason);
+      }
     }
     actionCreate(type, method) {
       method = method.toLowerCase();
@@ -1007,7 +1008,16 @@ var ActionUI = function (exports) {
         }
       }
     }
-    async fetch(type, id, query = {}) {
+    fetchOptions(type, options = {}, overrides = {}) {
+      deepCopy(options, this.options.fetch);
+      deepCopy(options, overrides);
+      if (!options.signal && this._model[type]) {
+        this._model[type]._abortController = new AbortController();
+        options.signal = this._model[type]._abortController.signal;
+      }
+      return options;
+    }
+    async fetch(type, id, query = {}, options = {}) {
       type = this.type({
         type: type
       });
@@ -1021,8 +1031,7 @@ var ActionUI = function (exports) {
         type: type,
         id: id
       };
-      let options = {};
-      deepCopy(options, this.options.fetch);
+      this.fetchOptions(type, options);
       this.before(type, options, data, query);
       let url = this.url(Object.assign({}, query, data));
       if (this.options.verbose) console.info('Store.fetch()', type, id, {
@@ -1039,7 +1048,7 @@ var ActionUI = function (exports) {
       if (!url) return Promise.reject();
       if (fetchOptions == null) {
         fetchOptions = {};
-        deepCopy(fetchOptions, this.options.fetch);
+        this.fetchOptions(type, fetchOptions);
       }
       try {
         eventData = eventData || {};
@@ -1056,7 +1065,7 @@ var ActionUI = function (exports) {
         if (!skipOnBefore) this.before(type, fetchOptions, eventData);
         const response = await fetch(url, fetchOptions);
         let json = await response.json();
-        this.after(type, this.options.fetch, eventData, response ? response.ok : false, response, json);
+        this.after(type, fetchOptions, eventData, response ? response.ok : false, response, json);
         if (!response.ok) return Promise.reject(json);
         let model = this.sync(json, url);
         this.urlCache(parsedUrl, model, json);
@@ -1142,14 +1151,14 @@ var ActionUI = function (exports) {
       }
       return pageNumber && pageSize ? this.page(type, pageNumber, pageSize, pageQuery) : Promise.resolve();
     }
-    async page(type, pageNumber = 1, pageSize = 0, query = {}) {
+    async page(type, pageNumber = 1, pageSize = 0, query = {}, options = {}) {
       query = query || {};
       pageSize = parseInt(pageSize) || this.options.defaultPageSize;
       pageNumber = parseInt(pageNumber) || 1;
       query.type = type;
       query[this.options.query['page[number]']] = pageNumber;
       query[this.options.query['page[size]']] = pageSize;
-      return await this.fetch(type, 0, query);
+      return await this.fetch(type, 0, query, options);
     }
     pageChange(type, pageNumber, pageSize, query = {}) {
       let pageKey = this.pageKey(pageSize, query);
@@ -1168,10 +1177,9 @@ var ActionUI = function (exports) {
       searchParams.sort();
       return searchParams.toString();
     }
-    async post(type, data, query = {}) {
+    async post(type, data, query = {}, options = {}) {
       type = type || this.type(data);
-      let options = {};
-      deepCopy(options, this.options.fetch);
+      this.fetchOptions(type, options);
       options.method = 'POST';
       options.body = this.body(type, data);
       this.before(type, options, data, query);
@@ -1201,12 +1209,12 @@ var ActionUI = function (exports) {
         return Promise.reject(error);
       }
     }
-    async patch(type, data, query = {}) {
+    async patch(type, data, query = {}, options = {}) {
       type = type || this.type(data);
-      let options = {};
-      deepCopy(options, this.options.fetch);
-      options.method = 'PATCH';
-      options.body = this.body(type, data);
+      this.fetchOptions(type, options, {
+        method: 'PATCH',
+        body: this.body(type, data)
+      });
       this.before(type, options, data, query);
       let url = this.url(Object.assign({}, query, {
         type: type,
@@ -1233,12 +1241,12 @@ var ActionUI = function (exports) {
         return Promise.reject(error);
       }
     }
-    async delete(type, id, query = {}) {
+    async delete(type, id, query = {}, options = {}) {
       let data = {};
       data[this.options.keys.id] = id;
-      let options = {};
-      deepCopy(options, this.options.fetch);
-      options.method = 'DELETE';
+      this.fetchOptions(type, options, {
+        method: 'DELETE'
+      });
       this.before(type, options, data, query);
       let url = this.url(Object.assign({}, query, {
         type: type,
@@ -1742,7 +1750,6 @@ var ActionUI = function (exports) {
 
     // #endregion
   }
-
   class ViewEventRenderBefore extends Event {
     constructor(detail) {
       super('view.render.before', {
@@ -1899,7 +1906,6 @@ var ActionUI = function (exports) {
 
     // #endregion
   }
-
   class ViewFileEventFetch extends Event {
     constructor(detail) {
       super('view.fetch', {
@@ -1959,7 +1965,6 @@ var ActionUI = function (exports) {
 
     // #endregion
   }
-
   let _options$3 = {};
   ViewHandlebars.options = ViewFile.options;
   ViewHandlebars.options.extension = 'hbs';
@@ -2205,7 +2210,6 @@ var ActionUI = function (exports) {
 
     // #endregion
   }
-
   let _cache$3 = {};
   let _options$4 = {
     controllers: {},
