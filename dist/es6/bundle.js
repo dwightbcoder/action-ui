@@ -343,7 +343,7 @@ var ActionUI = (function (exports) {
 
 	/**
 	 * @class Action
-	 * @version 20231116
+	 * @version 20231130
 	 * @description Allows named handlers to be handled as state-aware deferred promises with before/after events
 	 */
 	class Action
@@ -470,7 +470,7 @@ var ActionUI = (function (exports) {
 			if (_options.verbose) console.info('Action.after()', this.name, { action: this, target: target, data: data, success: success, result: result });
 
 			this.running = false;
-			var canceled = (result instanceof ActionErrorCanceled);
+			var canceled = (result instanceof ActionErrorCanceled) || (result instanceof DOMException && result.name == "AbortError");
 			var cssClass = success ? _options.cssClass.success : _options.cssClass.fail;
 			if (canceled) cssClass = _options.cssClass.canceled;
 			Action.setCssClass(target, cssClass, data);
