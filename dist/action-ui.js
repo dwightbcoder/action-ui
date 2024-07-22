@@ -4,7 +4,9 @@ var ActionUI = function (exports) {
   'use strict';
 
   /**
-   * Utilities
+   * @name Utilities
+   * @version 20240722
+   * @description Utility methods for class libraries
    */
 
   // Recursively copy source properties to target (Warning: Classes are treated as Objects)
@@ -60,10 +62,14 @@ var ActionUI = function (exports) {
     return firstMatchingParentElement(element.parentElement, selector);
   }
   function formToObject(form, data = {}) {
-    data = Object.assign(Object.fromEntries(new FormData(form)), data);
+    const formData = new FormData(form);
+    data = Object.assign(Object.fromEntries(formData), data);
     Object.entries(data).map(entry => {
       const keys = entry[0].split('[').map(key => key.replace(/]/g, ''));
-      if (keys.length > 1) {
+      if (entry[0].endsWith('[]')) {
+        data[keys[0]] = formData.getAll(entry[0]);
+        delete data[entry[0]];
+      } else if (keys.length > 1) {
         const obj = remapObjectKeys(keys, entry[1]);
         deepAssign(data, obj);
         delete data[entry[0]];
