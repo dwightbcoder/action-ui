@@ -1,5 +1,3 @@
-"use strict";
-
 var ActionUI = function (exports) {
   'use strict';
 
@@ -1946,7 +1944,7 @@ var ActionUI = function (exports) {
   class ViewHandlebars extends ViewFile {
     render(parent) {
       var _promise = Promise.resolve();
-      if (this.html == null && Handlebars.templates && Handlebars.templates[this.file]) {
+      if (this._html == null && Handlebars.templates && Handlebars.templates[this.file]) {
         this.html = Handlebars.templates[this.file];
       }
       return _promise.then(() => super.render(parent));

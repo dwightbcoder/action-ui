@@ -12,7 +12,7 @@ class ViewHandlebars extends ViewFile
     {
         var _promise = Promise.resolve()
 
-        if (this.html == null && Handlebars.templates && Handlebars.templates[this.file])
+        if (this._html == null && Handlebars.templates && Handlebars.templates[this.file])
         {
             this.html = Handlebars.templates[this.file]
         }
