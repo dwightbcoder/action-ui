@@ -35,6 +35,7 @@ When you fix one, delete its entry (or mark it fixed with the version) and updat
 | [A2](#a2) | Action | Request handlers overwrite themselves; the GET query string keeps growing | Medium | Confirmed (observed) |
 | [A3](#a3) | Action | GET query values are not URL-encoded | Low | Confirmed (code) |
 | [A4](#a4) | Action | `run()` resolves even when the action fails or is cancelled | Low | Confirmed (code) |
+| [A5](#a5) | Action | A successful response without a JSON body reports `fail` | Medium | Confirmed (code) |
 | [S1](#s1) | Store | `store.before` can't cancel a request | Medium | Confirmed (code) |
 | [S2](#s2) | Store | An array `viewMap` entry breaks the loading classes and `detail.view` | Low | Confirmed (code) |
 | [S3](#s3) | Store | `search()` only checks the last term and stops at the first nested object | Low | Confirmed (code) |
@@ -44,6 +45,7 @@ When you fix one, delete its entry (or mark it fixed with the version) and updat
 | [S7](#s7) | Store | An `AbortSignal` passed in `fetchOptions` overrides becomes `{}` | Low | Confirmed (code) |
 | [S8](#s8) | Store | `store.after` isn't cancelable, so there's no supported way to block a sync | Medium | Confirmed (observed) |
 | [S9](#s9) | Store | `triggerChangesOnEmpty` is never read; empty results reject instead | Low | Confirmed (code) |
+| [S10](#s10) | Store | A `viewMap` view created before the Store's model keeps its own model | Medium | Confirmed (code) |
 | [M1](#m1) | Model | `clearChanges()` doesn't stop changes from child models | Low | Inferred |
 | [M2](#m2) | Model | Syncing a string onto a child Model turns its characters into keys | Low | Confirmed (code) |
 | [M3](#m3) | Model | A Model assigned into a Model gets no parent, so its changes don't propagate | Medium | Confirmed (code) |
@@ -179,6 +181,16 @@ This has been seen in a real app: a form action that was never registered. Code 
 The same operation called through the Store (`store.fetch()`) rejects. Today the only reliable signal is `action.after`'s `detail.success` / `detail.canceled`.
 **Planned fix (1.4):** `Action.options.rejectOnFail`, default `false`. The default becomes `true` in 2.0 ([PLAN-1.4.md](PLAN-1.4.md#3f-action-store-and-view-minor)).
 
+<a id="a5"></a>
+### A5: A successful response without a JSON body reports `fail`
+`action.js:74`. Request actions always call `response.json()`. When the body isn't JSON, `json()` throws and the action reports `fail` even though the request succeeded:
+- **204 No Content**, or any empty body.
+- **HTML or text**, for example a post-back endpoint that redirects to a page.
+
+The README presents `ui-action` on a form as a way to "convert post-back forms to Fetch posts", so a developer would reasonably expect any OK response to report `success`. JSON sent with a non-JSON `Content-Type` (such as `text/html`) works today because `json()` ignores the header, and the fix must keep that working.
+Apps may depend on that `fail`, for example to detect a session redirect to an HTML login page.
+**Planned fix (1.4):** `Action.options.response.autoParse`, default `false` (today's behavior). `true` chooses the parser from the response, with `allowRedirect` and `allowEmpty` to refine it. The default becomes `true` in 2.0 ([PLAN-1.4.md](PLAN-1.4.md#response-parsing-a5)).
+
 ## Store
 
 <a id="s1"></a>
@@ -253,6 +265,11 @@ It needs an option because code that already calls `preventDefault()` here (the 
 The throw exists so that `triggerChangesOnError` fires and views re-render. An empty sync changes no Model, so without it a list view would keep showing the previous results. The comment on `triggerChangesOnError` says the same: "especially useful for Fetch All requests which return no results or 404". `triggerChangesOnEmpty` looks like the intended replacement: re-render on empty results without treating them as an error.
 
 **Planned fix (1.4):** `Store.options.emptyResult: 'reject' | 'resolve'`, default `'reject'`. With `'resolve'`, an empty result resolves with an empty collection and, if `triggerChangesOnEmpty` is on, triggers a change on the type's model so views re-render. The default becomes `'resolve'` in 2.0. Apps that block syncs by emptying `json.data` ([S8](#s8)) must move to `cancelableAfter` first.
+
+<a id="s10"></a>
+### S10: A `viewMap` view created before the Store's model keeps its own model
+`store.js:123, 129`. When the Store creates a type's model, it calls `viewClass.create({ name, file, model })`. `create()` returns the cached view when one with that name exists ([VIEW.md](VIEW.md)), and the passed model is silently ignored. That view keeps its own model and never re-renders from the Store's data.
+**Planned fix (1.4):** keep both models as they are and `console.warn` that the view and the type's model differ ([PLAN-1.4.md](PLAN-1.4.md#linking-ui-action-and-ui-view)).
 
 ## Model
 

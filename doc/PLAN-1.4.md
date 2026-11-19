@@ -11,9 +11,64 @@ This plan doesn't depend on any Util or Model change. The Util/Model work is in 
 - **Minor:** new features.
 - **Patch:** fixes and tweaks.
 
-A behavior change ships in a minor release behind a new option whose default keeps today's behavior. The default flips in the next major, and the old behavior is deprecated after that. The new options make this whole set 1.4.0.
+A behavior change ships in a minor release behind a new option whose default keeps today's behavior. The default flips in the next major, and the old behavior is deprecated after that. The new options make this whole set 1.4.0. Breaking is judged by what users on supported browsers observe ([doc README](README.md#development-notes)).
 
-**Browser floor:** ES2021, following the project's rolling five-year browser window (as of 2026: Chromium 87+, Safari 14+, Firefox 84+; no IE11). Don't use ES2022 syntax or later, such as `#private` fields, `.at()`, `Object.hasOwn` or `structuredClone`.
+**Browser floor:** the 1.4+ targets in the root [README](../README.md#browser-support), which are the 2027 floors. Language target: ES2022 with exclusions ([Language target](#language-target)).
+
+**Release gate:** don't publish 1.4.0 before January 1, 2027, when those floors take effect. Any 1.3.x patch before then stays on ES2021.
+
+---
+
+## Language target
+
+Browser floors and tested point releases for 1.4+ are in the root [README](../README.md#browser-support), and only there. This section turns them into code rules.
+
+### ES2022, with exclusions
+
+| Not allowed | Blocked by | Use instead |
+|---|---|---|
+| Class `static {}` blocks | Safari, Samsung Internet | Assign static values after the class body |
+| Parentheses inside a class-field initializer | Safari 15 bug that can throw a `ReferenceError` ([WebKit bug 236843](https://bugs.webkit.org/show_bug.cgi?id=236843)) | Initialize in the constructor |
+| `Object.hasOwn` | Samsung Internet | `Object.prototype.hasOwnProperty.call` |
+| `Error` `cause` | Samsung Internet | A library-specific property on the error |
+| ES2023+ (`findLast`, `toSorted`, `with`, …) | Chrome, Firefox | Existing ES2021 equivalents |
+
+Allowed: `#private` fields and methods, `#x in obj`, public and static fields, `.at()`, RegExp `/d`. Top-level await is allowed by the target but not needed in the library; Safari's support is partial.
+
+If the Samsung Internet floor is ever stated as a single Chromium number with Chrome's, re-check the three Samsung rows.
+
+### Web APIs
+
+| API | 1.4+ | Notes |
+|---|---|---|
+| `addEventListener(…, { signal })` | **Safe** | The basis for Watch ([PLAN-1.5.md](PLAN-1.5.md#7-watch)) |
+| `AbortController`, `signal.aborted`, `abort` event | **Safe** | Already used by `Store` |
+| `WeakMap`, `WeakRef`, `isConnected`, `replaceChildren` | **Safe** | See [PLAN-1.5.md](PLAN-1.5.md#no-gc-driven-cleanup) on `WeakRef` |
+| `AbortSignal.abort()` (static) | **Avoid** | Missing in Samsung Internet. Use `new AbortController()` then `.abort()` |
+| `signal.reason`, `throwIfAborted()` | **Avoid** | Missing in Chrome and Firefox at the floor |
+| `AbortSignal.any()`, `AbortSignal.timeout()` | **Avoid** | Missing at every floor; hand-roll ([PLAN-1.5.md](PLAN-1.5.md#combining-and-timing-out-signals)) |
+| `structuredClone` | **Avoid** | Missing in Chrome and Samsung Internet at the floor. `Util.clone` from 1.5 covers it |
+
+### Enforcement
+
+Today nothing enforces the target. The test harness step ([§1](#1-test-harness-do-this-first)) adds both.
+
+- **`browserslist`** mirrors the README's 1.4+ *tested* column, not its floor column, so features from point releases (such as `.at()` in Safari 15.4) aren't flagged. The README is the source; update both together.
+- **ESLint:**
+  - `ecmaVersion: 2022`;
+  - `eslint-plugin-compat` for the APIs;
+  - `no-restricted-syntax` with the `StaticBlock` selector.
+- **Check before relying on these:**
+  - whether `eslint-plugin-compat` flags `Object.hasOwn`, `Error` `cause` and the ES2023 array methods; add `no-restricted-properties` for any it misses;
+  - that the query resolves to the intended builds (`npx browserslist`).
+- Lint can't see parentheses in class-field initializers. That rule is enforced by code review.
+
+### At later reviews
+
+These are estimates; re-check them at each January review.
+- **2028:** `signal.reason`, `throwIfAborted()`, `structuredClone` and `findLast` likely become safe.
+- **2029:** the rest of ES2023 likely becomes safe.
+- **2030:** `AbortSignal.any()` and `timeout()` likely become safe.
 
 ---
 
@@ -22,8 +77,8 @@ A behavior change ships in a minor release behind a new option whose default kee
 Today nothing is tested automatically; the `test` script just exits with code 1. Every item in both plans changes runtime behavior, so the tests come before any code change.
 
 - Add `test/` using `node:test` with **jsdom** as the DOM. jsdom follows the DOM standards more completely than happy-dom, which is faster but covers less. For a small suite, accuracy matters more than speed, especially for `history`/`location`, events and `FormData(form)`. Whether happy-dom supports `FormData(form)` hasn't been checked.
-- Add a correctly spelled `browserslist` to `package.json` that matches the floor. The original was misspelled `browserlist`, so it never took effect.
-- Optional: ESLint with `ecmaVersion: 2021` and `eslint-plugin-compat` to catch syntax and APIs above the floor.
+- Add a correctly spelled `browserslist` to `package.json`, set as described in [Language target](#enforcement). The original was misspelled `browserlist`, so it never took effect.
+- ESLint as a dev dependency, configured as in [Language target](#enforcement), to catch syntax and APIs above the floor. Run it alongside the tests in `npm test`.
 
 Router scenarios to cover:
 - `start()` → `navigate()`, back/forward, and same-URL navigation.
@@ -36,6 +91,8 @@ Router scenarios to cover:
 
 Action, Store and View scenarios for [3f](#3f-action-store-and-view-minor):
 - A GET Request action run twice with different values sends only the newest value, URL-encoded ([A2](BUGS.md#a2), [A3](BUGS.md#a3)).
+- Request action responses ([A5](BUGS.md#a5)): with `autoParse: false`, behavior is unchanged; with `autoParse: true`, 204 and empty or whitespace-only bodies report `success` without syncing and `fail` with `allowEmpty: false`; an `allowEmpty` function sees every successful response, can fail `{}`, and a throw reports `fail`; a redirect to HTML fails unless `allowRedirect: true`, a redirect to JSON syncs; JSON with a JSON `Content-Type` syncs; JSON sent as `text/html` still syncs; an HTML fragment syncs as `{ result }`; malformed JSON with a JSON `Content-Type` reports `fail`.
+- `ui-action` + `ui-view` with `Action.options.viewClass` set: each of the four ownership cases, the warning when both exist with different models, and that the form keeps its status class after the re-render.
 - `run()` resolves on failure and cancel by default, and rejects with `rejectOnFail: true` ([A4](BUGS.md#a4)).
 - Preventing `store.before` sends no request, including on a URL-cache hit, rejects with `AbortError`, clears `loading`, and marks the wrapping action `canceled` ([S1](BUGS.md#s1)).
 - `store.after`: `preventDefault()` does nothing with `cancelableAfter: false`; with `true` it skips the sync and the URL cache and rejects with `AbortError` ([S8](BUGS.md#s8)).
@@ -143,6 +200,9 @@ The intent is "the state is what is now true, not what will become true": push o
 | [V2](BUGS.md#v2) | Render events: `name: this.model.view ?? this.name`. No route information is added to render events. | Fix | `name` is always the view name |
 | [U1](BUGS.md#u1) | Repurpose `Util.requestFromElement(element, data = {}, base = null)` as the request builder the A2 fix needs (below). | Enhancement | — |
 | `JsonApi` | Deprecate: docs, plus a one-time `console.warn` in the constructor. | Deprecated | Removed |
+| [A5](BUGS.md#a5) | `Action.options.response`: `autoParse` chooses the parser from the response instead of always calling `json()`; `allowRedirect` and `allowEmpty` refine it ([below](#response-parsing-a5)). | `autoParse: false` | `autoParse: true` |
+| `ui-action` + `ui-view` | `Action.options.viewClass`: an auto-created action on an element with `ui-view` shares its model with that view ([below](#linking-ui-action-and-ui-view)). | `null` (off) | Open |
+| [S10](BUGS.md#s10) | Warn when a `viewMap` view already has a different model. | Fix | — |
 
 **`requestFromElement`.** Today it only works for a `<form>`: `form.action` always returns a URL (the document's URL when the attribute is missing), and any other element reaches the undefined `options` and throws. So anyone calling it today passes a form and gets `Request(form.action, { method: form.method })`. The new version:
 - **`requestFromElement(form)`** returns the same Request as today.
@@ -152,6 +212,54 @@ The intent is "the state is what is now true, not what will become true": push o
 - `Action.run()` calls it with the original Request as `base`, which is the A2 fix. App code can call it to build exactly the request an action would send.
 
 It's a fix plus optional arguments, so it belongs in 1.4. If it turned out to break an existing caller, it would wait for 2.0.
+
+<a id="response-parsing-a5"></a>
+**Response parsing (A5).**
+
+```js
+Action.options.response = {
+  autoParse: false,      // 1.4: false (today's behavior); 2.0: true
+  allowRedirect: false,
+  allowEmpty: true,      // or false, or (text, response) => boolean
+}
+```
+
+**`allowEmpty`** decides whether a successful response is accepted or fails as empty:
+- `true` (default): every response is accepted.
+- `false`: shorthand for `text => text.trim() !== ''`, so an empty or whitespace-only body fails, at any status, 204 and 205 included.
+- A function `(text, response) => boolean`: replaces the definition of empty. It's called for every successful response, before parsing, with the raw body and the `Response`. Return `false` to fail the response as empty. If it throws, the action reports `fail` with that error, as a throwing handler does. For example, `text => !['', '{}', '[]', 'null'].includes(text.trim())`, or a check on `response.status`.
+
+With `autoParse: true`, read the body once with `text()`, then:
+1. **Redirected** (`response.redirected`) and the body isn't JSON: with `allowRedirect: false`, report `fail`. A redirect that lands on JSON (for example POST, then 303, then GET the created resource) is treated like any other response.
+2. **`allowEmpty`:** if it rejects the response (above), report `fail`. Otherwise, an empty or whitespace-only body reports `success` with an `undefined` result, so nothing syncs; `after()` already skips the sync for `undefined`.
+3. **JSON `Content-Type`** (`application/json`, or `*+json` such as JSON:API): `JSON.parse`. Malformed JSON reports `fail`, as today.
+4. **Anything else:** try `JSON.parse`. If the result is an object or array, use it, so JSON sent as text keeps working. Otherwise use the text. `syncModel()` already wraps a non-object as `{ result }`, so a template can render an HTML fragment with `{{{result}}}`.
+
+`response.ok` still decides success or failure otherwise, and failed responses are parsed the same way. This applies only to Request actions: `Store` is JSON by design, and `JsonApi` is being deprecated.
+
+- **Why `autoParse` defaults to `false`:** apps may have built around blank or text responses failing. For example, an expired session that redirects to a login page returns `200` with HTML; today that reports `fail`, which an app can use to prompt a sign-in.
+- **Why `allowRedirect` defaults to `false`:** that same login case keeps reporting `fail` after 2.0 turns `autoParse` on. A post-back endpoint that legitimately redirects to a "thanks" page needs `allowRedirect: true`.
+- **`allowRedirect` and `allowEmpty` only apply when `autoParse` is `true`.** With `autoParse: false`, every non-JSON or empty body already fails, as today, and a redirect that lands on JSON still succeeds.
+- `response.redirected` is reliable for same-origin requests. A cross-origin `no-cors` response is opaque, so its body can't be read at all ([S4](BUGS.md#s4)).
+- **One small difference with `autoParse`:** a text body that is a bare scalar (`123`, `true`) stays a string instead of being parsed into a number or boolean. Both sync as `{ result }`.
+
+<a id="linking-ui-action-and-ui-view"></a>
+**Linking `ui-action` and `ui-view`.** `<form ui-action="contact us" ui-view="contact-us">` makes the form both the action's trigger and the view's container. The action's response re-renders the form's contents, and the form element itself, with its status class, stays in place.
+
+This follows the Store's `viewClass` / `viewMap` pattern: `Action.options.viewClass` defaults to `null`, so the link is off until configured. When an action is auto-created from an element with `ui-view`, the name in `ui-view` is used as the view's name and its template file. **Whichever exists first owns the model, and the other adopts it:**
+
+| Action exists? | View exists? | Result |
+|---|---|---|
+| No | No | The action creates its model; the view is created with it (the Store pattern). |
+| No | Yes | The action is auto-created **with the view's model**. |
+| Yes | No | The view is created with the action's model. |
+| Yes | Yes, with different models | Leave both alone and `console.warn`. Both were set up explicitly. |
+
+Models are only auto-created when neither exists, and nothing is replaced after it's created. The Store gets the same warning for [S10](BUGS.md#s10).
+
+**Open:**
+- Whether `viewClass` defaults to a view class in 2.0.
+- What happens when an element has `ui-view` but no view class is configured: silently nothing, or a `verbose` hint.
 
 **`JsonApi`.** Nothing it does is missing from `StoreJsonApi`. Its only distinct trait is that the store is itself a `Model`, and `store.model(type)` covers that. It is also broken in places:
 - `post()` is an empty stub, and there's no `patch()` or `delete()`.
@@ -212,7 +320,8 @@ Test scenarios: fires once per navigation, including redirects, `start()`, click
 
 ## 5. Compatibility
 
-- Defaults keep today's behavior: `requireStart: false`, `navigateOnStart: true`, `rejectOnFail: false`, `cancelableAfter: false`, `emptyResult: 'reject'`.
+- Defaults keep today's behavior: `requireStart: false`, `navigateOnStart: true`, `rejectOnFail: false`, `response.autoParse: false`, `cancelableAfter: false`, `emptyResult: 'reject'`.
 - Behavior that changes without an option, because nothing could reasonably depend on the old behavior: A2/A3 (Request actions), S1 (`preventDefault()` on an already-cancelable `store.before`), V2 (`undefined` → the view name).
+- New and off by default: `Action.options.viewClass` (`null`).
 - `Router.state` changes from "everything merged so far" to "default plus the current route". Its setter still sets the default before `start()`. Code that relied on old keys carrying over would notice the difference, but that carry-over is the bug ([R8](BUGS.md#r8)).
 - Before release, test in a non-production environment against at least one real consumer app.

@@ -14,8 +14,9 @@ The [GitHub wiki](https://github.com/dwightbcoder/action-ui/wiki) covers the bas
 | [UTIL.md](UTIL.md) | `Util` functions |
 | [JSONAPI.md](JSONAPI.md) | Legacy `JsonApi` model (superseded by `StoreJsonApi`) |
 | [BUGS.md](BUGS.md) | Known defects and surprising behavior, with IDs referenced from the other files |
-| [PLAN-1.4.md](PLAN-1.4.md) | Release plan: Router lifecycle, state and events; Action/Store/View fixes; test harness |
-| [PLAN-1.5.md](PLAN-1.5.md) | Release plan: `Util.clone`, Model ownership and membership, Router Back-button guards |
+| [PLAN-1.4.md](PLAN-1.4.md) | Release plan: ES2022 language target; Router lifecycle, state and events; Action/Store/View fixes; test harness |
+| [PLAN-1.5.md](PLAN-1.5.md) | Release plan: `Util.clone`, Model ownership and membership, Router Back-button guards, `Watch` |
+| [PLAN-2.0.md](PLAN-2.0.md) | Release plan: default flips for behavior introduced behind options in 1.x |
 
 ## How the pieces fit
 
@@ -63,16 +64,18 @@ Router ──▶ Controller method ──▶ view.render()
 
 - The source is in `src/`. `src/bundle.js` and `dist/` are build output (`npm run build`), so don't edit them by hand.
 - There is no test suite (`npm test` exits with an error). A harness is planned ([PLAN-1.4.md](PLAN-1.4.md#1-test-harness-do-this-first)).
-- **Browser support** follows a rolling five-year window: the latest stable major version on January 1, five years back. As of 2026 that's Chromium 87+, Safari 14+ and Firefox 84+. IE11 and Classic Edge are not supported.
-  - In practice this means **ES2021** for both syntax and built-in APIs.
-  - ES2022 features such as `#private` fields, class static blocks, `.at()`, `Object.hasOwn` and `structuredClone` are not available on the floor.
+- **Browser support:** floors, tested point releases and the JS target for each major version are in the root [README](../README.md#browser-support), and only there.
+  - **1.0–1.3** target **ES2021** for both syntax and built-in APIs. ES2022 features such as `#private` fields, class static blocks, `.at()`, `Object.hasOwn` and `structuredClone` are not available.
+  - **1.4+** targets **ES2022** with exclusions; the code rules are in [PLAN-1.4.md](PLAN-1.4.md#language-target).
   - There is no Babel or `browserslist` config, so the source is shipped as written. Consumers that import `src/` bundle it with their own tooling.
 - **Versioning:**
   - **Major:** breaking changes.
   - **Minor:** new features.
   - **Patch:** fixes and tweaks.
 
-  A behavior change that a reasonable user could depend on is breaking, even when the old behavior was unintended.
+  A behavior change that a reasonable user on a supported browser could depend on is breaking, even when the old behavior was unintended.
+
+  Raising browser floors at the annual review is **not** breaking: users on supported browsers observe no difference. Each release supports the floors in effect on its release date. Requiring a major for floor changes would signal that the old major stops working for apps, which isn't true.
 
   The pattern for those changes: ship the new behavior in a minor release behind a new option whose default keeps today's behavior. Flip the default in the next major, and deprecate the old behavior in a later major.
 - Commits use the format `vX.Y.Z - description`.
@@ -86,3 +89,7 @@ Before calling something a bug or a design decision, check the evidence in this 
 4. **Inference.**
 
 Then ask what a developer would **reasonably expect**. Where the behavior and that expectation differ, decide whether the fix belongs in the code, the name, the parameters or the docs.
+
+Weigh both against the library's two principles ([Why Action UI](../README.md#why-action-ui)):
+- **Action's core loop:** request, then status class, then re-render. Behavior that serves that loop is likely intended.
+- **Freedom of implementation:** a change that forces apps to adopt something all at once is the wrong shape, even when the goal is right. Make it opt-in first.

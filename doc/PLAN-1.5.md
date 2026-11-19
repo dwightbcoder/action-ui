@@ -7,10 +7,11 @@
 - Keep `Model` change propagation working once cloned `Model`s are real `Model`s.
 - Let a `Model` belong to several containers.
 - Back-button guards for the Router ([§6](#6-router-back-button-guards)).
+- A `Watch` module so DOM listeners and `Model` watchers can be removed one at a time or as a group, and detached elements stop being retained ([§7](#7-watch)).
 
 Parts A and B make up the Model work in v1.5.0. **Part A must ship as a whole:** the `Model` clone hook without set-trap adoption breaks change propagation ([why](#why-the-hook-and-adoption-ship-together)).
 
-**Browser floor:** ES2021 (see [PLAN-1.4.md](PLAN-1.4.md)). `structuredClone` isn't available on the floor (Safari 15.4+), so the clone is written by hand.
+**Browser floor:** ES2022 with exclusions (see [PLAN-1.4.md](PLAN-1.4.md#language-target)). `structuredClone` isn't available on the floor, so the clone is written by hand.
 
 ---
 
@@ -187,9 +188,82 @@ In v1.4, `router.before` isn't cancelable on `popstate`, because the browser has
 - Entries written by other code have no counter. `history.replaceState(null, …)` wipes it. The Apex apps do this in `config/index.js` and `storeController.js`, and need to keep `history.state` or leave the change to the Router.
 - Leaving the app (Back to another site, reload, closing the tab) fires no `popstate`. Apps add `beforeunload`, which shows the browser's own generic prompt.
 - The address bar may briefly show the other route before it's restored.
-- The browser Navigation API has a cancelable event for Back and Forward, but it isn't available on the ES2021 browser floor (Safari 14, Firefox 84). Current support hasn't been checked.
+- The browser Navigation API has a cancelable event for Back and Forward, but it isn't available at the current browser floors ([README](../README.md#browser-support)).
 
 **Tests:** Back and Forward cancelled each return to the right entry; the follow-up `popstate` is ignored; rapid repeated Back presses; entries without a counter aren't cancelable; the counter survives a reload.
+
+## 7. Watch
+
+**Depends on:** Part B's `unwatch()` ([§3](#3-model)). **Principles:** Watch serves `Action`'s core loop first, and it's opt-in ([Why Action UI](../README.md#why-action-ui)). It relies on `addEventListener(…, { signal })`, which the 1.4+ floors support ([PLAN-1.4.md](PLAN-1.4.md#web-apis)).
+
+### Problem
+
+Long-running SPAs keep detached DOM elements alive. A listener alone doesn't do that: removing an element garbage-collects the element and its own listeners together. Something long-lived has to hold a reference. In this library, the likely paths are:
+
+- **`Model` watchers.** For example `model.watch(() => el.textContent = …)`. Before 1.5 a watcher can't be removed, and models live in the `View`, `Store` and controller caches.
+- **`View` constructor.** `model.watch((changes) => this.update(changes))` ([view.js:22](../src/modules/view.js#L22)) ties every `View` to its model forever.
+- **No way to unsubscribe.** `Action.init()` and `Router.start()` add anonymous or bound listeners that can't be removed ([BUGS](BUGS.md), Router `start()` twice).
+- **App listeners on `document` or `window`** that close over elements inside a view.
+
+**Confirm before designing further.** Take a heap snapshot of `example/` after several navigations, filter for "Detached", and record each element's retainer chain. The result decides how central the render scope (below) is.
+
+### Shape
+
+```js
+const sub = Watch.on(target, 'click', handler)               // DOM listener
+const sub = Watch.on(document, 'click', '[ui-action]', fn)   // delegated
+const sub = Watch.on(model, changes => …)                    // Model watcher
+sub.off()
+
+const scope = Watch.scope()          // a group
+scope.on(…); scope.on(…)
+scope.dispose()                      // removes everything in it
+scope.signal                         // AbortSignal, for native listeners and fetch
+```
+
+- **DOM listeners** use `addEventListener(…, { signal: scope.signal })`. There is no list of listeners to remove by hand.
+- **`Model` watchers** register with `watch()` and call `unwatch()` when the signal's `abort` event fires. This needs Part B1.
+- **Every subscription returns the same kind of handle**, but the mechanisms stay separate. DOM events fire synchronously; `Model` changes are batched on a 10 ms timer and passed up to the parent. Don't merge them into one bus.
+- **Public and opt-in.** Apps can subscribe through Watch to get cleanup handled, but native `addEventListener` and `model.watch()` keep working unchanged. Nothing requires an app to use Watch.
+- **Events the library fires stay DOM `CustomEvent`s**, which keep bubbling, DevTools visibility and interop. Watch changes how subscriptions are made and removed, not how events are delivered.
+
+### Render scope
+
+Each `View` render gets its own scope. The `View` disposes the previous scope just before it replaces `innerHTML`, and again on `clear()`.
+
+- **Library subscriptions** made during a render join the scope automatically.
+- **App subscriptions** join only when the app subscribes through the scope. Native listeners an app adds stay the app's responsibility.
+
+- `View` gains a `dispose()` method that disposes its current render scope and unwatches its model.
+- **Open:** how app code gets the current render scope (passed to a render hook, or `view.scope`).
+
+### No GC-driven cleanup
+
+Don't use a `FinalizationRegistry` or `WeakRef` to clean up subscriptions, and don't use a `MutationObserver` that watches for node removal.
+- GC timing is unpredictable, so tests can't be deterministic.
+- A `MutationObserver` mistakes moved nodes for removed ones and costs time on every DOM change.
+
+Using a `WeakMap` for bookkeeping is fine.
+
+### Combining and timing out signals
+
+`AbortSignal.any()` and `timeout()` aren't available. A scope nested in another scope aborts its own controller when the parent's `abort` event fires. Timeouts use `setTimeout` plus `abort()`. Watch reports why a scope was disposed through its own API and never reads `signal.reason`.
+
+### Library internals moved onto Watch
+
+`Action` goes first: its listeners and the View-to-model watcher are the core loop.
+
+| Today | 1.5 |
+|---|---|
+| `Action.init()` adds anonymous click and submit listeners | A module scope; a new `Action.stop()` disposes it |
+| `Router.start()` / `stop()` keep bound handlers ([PLAN-1.4.md](PLAN-1.4.md)) | A Router scope |
+| `View` constructor `model.watch(...)` | A subscription owned by the `View` and removed by `dispose()` |
+
+### Open
+
+- Heap-snapshot result: are watchers the main retainer? Do this before finalizing the design.
+- Naming: `on`/`off`/`scope`/`dispose`, compared with the existing `watch`/`unwatch` on `Model`.
+- `View` gaining `dispose()` changes what a cached `View` means. Decide whether `View.cache` entries are ever disposed, and by what.
 
 ---
 
@@ -207,6 +281,11 @@ Using the harness from v1.4:
   - `delete`/`clear()` unwatch.
   - A cycle stops.
   - Chaining still works.
+- **Watch:**
+  - `sub.off()` and `scope.dispose()` remove DOM listeners and `Model` watchers.
+  - A nested scope is disposed with its parent.
+  - A `View` re-render disposes the previous render scope; app listeners added natively are untouched.
+  - `Action.stop()` removes its document listeners.
 
 Before release, test in a non-production environment against at least one real consumer app. Every `sync()` passes through this code.
 
