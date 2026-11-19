@@ -57,6 +57,21 @@ function deepCopy(target, source)
 	return deepAssign(target, source, true)
 }
 
+const CLONE = Symbol.for('action-ui.clone')
+function clone(value, deep = false, keepUncloneable = true)
+{
+	let seen = new WeekMap()
+	return cloneValue(value, seen, deep)
+}
+
+function cloneValue(value, seen, deep = false)
+{
+	let copy = undefined
+
+	if (typeof obj[CLONE] == 'function')
+		copy = obj[CLONE]()
+}
+
 function requestFromElement(element)
 {
 	return new Request(

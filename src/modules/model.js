@@ -10,17 +10,7 @@ class Model
 {
 	constructor(data = {}, parent = null)
 	{
-		let proxy = null
-
-		try
-		{
-			proxy = new Proxy(this, { set: this.constructor._proxySet, deleteProperty: this.constructor._proxyDelete })
-		}
-		catch (e)
-		{
-			// IE11 Proxy polyfill does not support delete
-			proxy = new Proxy(this, { set: this.constructor._proxySet })
-		}
+		let proxy = new Proxy(this, { set: this.constructor._proxySet, deleteProperty: this.constructor._proxyDelete })
 
 		// Set private properties
 		proxy._options = { triggerDelay: 10 }
@@ -41,17 +31,7 @@ class Model
 	{
 		for (let i in this)
 		{
-			try
-			{
-				delete this[i]
-			}
-			catch (e)
-			{
-				// Fallback for IE11
-				let originalValue = this[i]
-				this[i] = undefined
-				this._change(i, undefined, originalValue)
-			}
+			delete this[i]
 		}
 
 		return this
@@ -65,6 +45,7 @@ class Model
 		}
 
 		this._loading = !!isLoading
+		return this
 	}
 
 	// Sync data object to model
@@ -85,6 +66,16 @@ class Model
 		return this
 	}
 
+	unwatch(callback)
+	{
+		const i = this._watchers.indexOf(callback)
+		if (i > -1)
+		{
+			this._watchers.splice(i, 1)
+		}
+		return this
+	}
+
 	clearChanges()
 	{
 		this._changes = {}
@@ -100,6 +91,7 @@ class Model
 				this._change(i, changes[i], this[i])
 			}
 		}
+		return this
 	}
 
 	// @deprecated
@@ -155,7 +147,7 @@ class Model
 		{
 			target[prop].sync(value)
 		}
-		else if (window.Reflect && window.Reflect.set)
+		else
 		{
 			if (value instanceof Object && !Array.isArray(value) && !(value instanceof Model) && prop[0] != '_')
 			{
@@ -164,10 +156,6 @@ class Model
 			}
 
 			Reflect.set(target, prop, value)
-		}
-		else
-		{
-			throw 'Missing Model dependency: Reflect.set()'
 		}
 
 		if (prop[0] == '_')
