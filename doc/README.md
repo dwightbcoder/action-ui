@@ -17,6 +17,7 @@ The [GitHub wiki](https://github.com/dwightbcoder/action-ui/wiki) covers the bas
 | [PLAN-1.4.md](PLAN-1.4.md) | Release plan: ES2022 language target; Router lifecycle, state and events; Action/Store/View fixes; test harness |
 | [PLAN-1.5.md](PLAN-1.5.md) | Release plan: `Util.clone`, Model ownership and membership, Router Back-button guards, `Watch` |
 | [PLAN-2.0.md](PLAN-2.0.md) | Release plan: default flips for behavior introduced behind options in 1.x |
+| [PLAN-2.0-MODEL.md](PLAN-2.0-MODEL.md) | Release plan: the `Model` redesign |
 
 ## How the pieces fit
 
